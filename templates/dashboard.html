@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCCP Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 6px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #58a6ff;
+        }
+        
+        .status-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .status-connected { background: #238636; color: #fff; }
+        .status-disconnected { background: #da3633; color: #fff; }
+        
+        .stats-bar {
+            display: flex;
+            gap: 15px;
+            font-size: 11px;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        
+        .stat-num {
+            font-weight: 600;
+            color: #58a6ff;
+        }
+        
+        .search-bar {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 8px 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .search-input {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 300px;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        .filter-select {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        .filter-label {
+            font-size: 11px;
+            color: #8b949e;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .tab {
+            padding: 8px 15px;
+            font-size: 12px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #8b949e;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: #c9d1d9;
+        }
+        
+        .tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
+        
+        .tab-badge {
+            background: #30363d;
+            padding: 1px 5px;
+            border-radius: 8px;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+        
+        .tab.active .tab-badge {
+            background: #58a6ff;
+            color: #0d1117;
+        }
+        
+        .content {
+            padding: 10px 15px;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .view-toggle {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .view-btn {
+            padding: 4px 8px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            font-size: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .view-btn:hover {
+            color: #c9d1d9;
+            border-color: #58a6ff;
+        }
+        
+        .view-btn.active {
+            background: #58a6ff;
+            color: #0d1117;
+            border-color: #58a6ff;
+        }
+        
+        .console-container {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 11px;
+            overflow: hidden;
+        }
+        
+        .console-header {
+            background: #161b22;
+            padding: 6px 10px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .console-title {
+            color: #8b949e;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .console-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .console-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 2px 6px;
+            font-size: 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        
+        .console-btn:hover {
+            color: #c9d1d9;
+        }
+        
+        .console-output {
+            height: 450px;
+            overflow-y: auto;
+            padding: 8px 10px;
+            background: #0d1117;
+        }
+        
+        .console-line {
+            display: flex;
+            gap: 10px;
+            padding: 3px 0;
+            line-height: 1.4;
+            border-bottom: 1px solid #161b22;
+        }
+        
+        .console-line:hover {
+            background: #161b22;
+        }
+        
+        .console-time {
+            color: #484f58;
+            min-width: 60px;
+        }
+        
+        .console-type {
+            min-width: 50px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 10px;
+        }
+        
+        .console-type.incoming { color: #3fb950; }
+        .console-type.outgoing { color: #58a6ff; }
+        .console-type.queue { color: #d29922; }
+        .console-type.ended { color: #8b949e; }
+        
+        .console-queue {
+            min-width: 150px;
+            color: #c9d1d9;
+        }
+        
+        .console-agent {
+            min-width: 100px;
+            color: #a371f7;
+        }
+        
+        .console-duration {
+            min-width: 60px;
+            color: #7ee787;
+            text-align: right;
+        }
+        
+        .console-empty {
+            color: #484f58;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .console-stats {
+            display: flex;
+            gap: 15px;
+            padding: 5px 10px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            font-size: 10px;
+        }
+        
+        .console-stat {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .console-stat-num {
+            color: #58a6ff;
+            font-weight: 600;
+        }
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            width: 500px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-header {
+            background: #161b22;
+            padding: 12px 15px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            color: #c9d1d9;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #8b949e;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+        
+        .modal-close:hover {
+            color: #c9d1d9;
+        }
+        
+        .modal-body {
+            padding: 15px;
+        }
+        
+        .modal-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .modal-section:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .modal-section-title {
+            color: #8b949e;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .modal-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+        
+        .modal-label {
+            color: #8b949e;
+            font-size: 12px;
+        }
+        
+        .modal-value {
+            color: #c9d1d9;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .modal-value.phone {
+            color: #58a6ff;
+        }
+        
+        .modal-value.state {
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+        }
+        
+        .modal-value.duration {
+            color: #7ee787;
+        }
+        
+        .modal-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .modal-avatar.supervisor { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .modal-avatar.agent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        
+        .modal-btn {
+            flex: 1;
+            padding: 8px 12px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .modal-btn:hover {
+            background: #30363d;
+        }
+        
+        .modal-btn.primary {
+            background: #238636;
+            border-color: #238636;
+        }
+        
+        .modal-btn.primary:hover {
+            background: #2ea043;
+        }
+        
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            background: #21262d;
+        }
+        
+        .users-table th,
+        .users-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .users-table th {
+            background: #161b22;
+            font-weight: 600;
+            color: #8b949e;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .users-table td {
+            vertical-align: middle;
+        }
+        
+        .users-table tr:hover td {
+            background: #161b22;
+        }
+        
+        .table-name-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .table-phone {
+            color: #8b949e;
+            font-size: 10px;
+        }
+        
+        .table-state {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+        
+        .table-state.unplugged { background: #ff174444; color: #ff5252; }
+        .table-state.plugged { background: #00c85344; color: #69f0ae; }
+        .table-state.ringing { background: #ff910044; color: #ffab40; }
+        .table-state.busy { background: #ff174444; color: #ff5252; }
+        .table-state.pause { background: #ffab0044; color: #ffab00; }
+        .table-state.outbound { background: #ff174444; color: #ff5252; }
+        
+        .table-duration {
+            color: #81c784;
+            font-size: 10px;
+            font-weight: 500;
+        }
+        
+        .table-session {
+            color: #ce93d8;
+            font-size: 9px;
+            font-family: monospace;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .user-phone {
+            color: #8b949e;
+            font-size: 10px;
+        }
+        
+        .users-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 8px;
+        }
+        
+        .user-card {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+        
+        .user-card:hover {
+            border-color: #58a6ff;
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .user-avatar.supervisor { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .user-avatar.agent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        
+        .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .user-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #c9d1d9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .user-profile {
+            font-size: 11px;
+            color: #8b949e;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .user-phone {
+            color: #8b949e;
+            font-size: 10px;
+        }
+        
+        .user-state {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+        
+        .user-state.supervisor { background: #667eea44; color: #a8a4ff; }
+        .user-state.agent { background: #11998e44; color: #38ef7d; }
+        .user-state.unplugged { background: #ff174444; color: #ff5252; }
+        .user-state.plugged { background: #00c85344; color: #69f0ae; }
+        .user-state.ringing { background: #ff910044; color: #ffab40; }
+        .user-state.busy { background: #ff174444; color: #ff5252; }
+        .user-state.pause { background: #ffab0044; color: #ffab00; }
+        .user-state.outbound { background: #ff174444; color: #ff5252; }
+        
+        .users-table tr:hover td {
+            background: #161b22;
+        }
+        
+        .user-name-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .user-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .user-avatar.supervisor { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .user-avatar.agent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        
+        .user-name {
+            font-weight: 600;
+            color: #c9d1d9;
+        }
+        
+        .user-phone {
+            color: #8b949e;
+            font-size: 10px;
+        }
+        
+        .user-state {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+        
+        .user-state.supervisor { background: #667eea44; color: #a8a4ff; }
+        .user-state.agent { background: #11998e44; color: #38ef7d; }
+        .user-state.unplugged { background: #ff174444; color: #ff5252; }
+        .user-state.plugged { background: #00c85344; color: #69f0ae; }
+        .user-state.ringing { background: #ff910044; color: #ffab40; }
+        .user-state.busy { background: #ff174444; color: #ff5252; }
+        .user-state.pause { background: #ffab0044; color: #ffab00; }
+        .user-state.outbound { background: #ff174444; color: #ff5252; }
+        
+        .user-badges {
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+        }
+        
+        .user-phone {
+            color: #8b949e;
+            font-size: 10px;
+        }
+        
+        .user-badges {
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+        }
+        
+        .user-badge {
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 6px;
+            background: #30363d;
+            color: #8b949e;
+        }
+        
+        .user-badge.state { background: rgba(0, 217, 255, 0.2); color: #00d9ff; }
+        .user-badge.task { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .user-badge.time { background: rgba(76, 175, 80, 0.2); color: #81c784; }
+        .user-badge.session { background: rgba(156, 39, 176, 0.2); color: #ce93d8; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+        .user-badge.mode { background: rgba(33, 150, 243, 0.2); color: #64b5f6; }
+        
+        .queues-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        
+        .queues-table th,
+        .queues-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #21262d;
+        }
+        
+        .queues-table th {
+            background: #161b22;
+            font-weight: 600;
+            color: #8b949e;
+            position: sticky;
+            top: 0;
+        }
+        
+        .queues-table tr:hover td {
+            background: #161b22;
+        }
+        
+        .queue-stat {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 4px;
+            margin-right: 3px;
+            font-size: 10px;
+        }
+        
+        .queue-stat.logged { background: #23863644; color: #3fb950; }
+        .queue-stat.working { background: #1f6feb44; color: #58a6ff; }
+        .queue-stat.waiting { background: #d2992244; color: #d29922; }
+        
+        .calls-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .call-card {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .call-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .call-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+        
+        .call-icon.incoming { background: #23863644; color: #3fb950; }
+        .call-icon.outgoing { background: #1f6feb44; color: #58a6ff; }
+        
+        .call-numbers {
+            font-size: 11px;
+            color: #c9d1d9;
+        }
+        
+        .call-time {
+            font-size: 10px;
+            color: #8b949e;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #8b949e;
+            font-size: 12px;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 8px;
+            font-size: 10px;
+            color: #484f58;
+            border-top: 1px solid #30363d;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <h1>CCCP Monitor</h1>
+            <span id="status-badge" class="status-badge status-disconnected">Déconnecté</span>
+        </div>
+        <div class="stats-bar">
+            <div class="stat-item"><span class="stat-num" id="stat-total">0</span> Total</div>
+            <div class="stat-item"><span class="stat-num" id="stat-supervisors">0</span> Sup.</div>
+            <div class="stat-item"><span class="stat-num" id="stat-agents">0</span> Agents</div>
+            <div class="stat-item"><span class="stat-num" id="stat-logged">0</span> Connectés</div>
+        </div>
+    </div>
+    
+    <div class="search-bar">
+        <input type="text" id="search-input" class="search-input" placeholder="Rechercher par nom, téléphone, session...">
+        <span class="filter-label">État:</span>
+        <select id="state-filter" class="filter-select">
+            <option value="">Tous</option>
+            <option value="plugged">Connecté</option>
+            <option value="unplugged">Déconnecté</option>
+            <option value="ringing">Sonne</option>
+            <option value="busy">Occupé</option>
+            <option value="pause">Pause</option>
+            <option value="outbound">Sortant</option>
+        </select>
+        <span class="filter-label">Type:</span>
+        <select id="type-filter" class="filter-select">
+            <option value="">Tous</option>
+            <option value="supervisor">Superviseurs</option>
+            <option value="agent">Agents</option>
+        </select>
+    </div>
+    
+    <div class="tabs">
+        <div class="tab active" data-tab="users">
+            Utilisateurs<span class="tab-badge" id="users-count">0</span>
+        </div>
+        <div class="tab" data-tab="queues">
+            Queues<span class="tab-badge" id="queues-count">0</span>
+        </div>
+        <div class="tab" data-tab="calls">
+            Appels<span class="tab-badge" id="calls-count">0</span>
+        </div>
+    </div>
+    
+    <div class="content">
+        <div id="users-tab" class="tab-content active">
+            <div class="view-toggle">
+                <button class="view-btn active" data-view="table">Table</button>
+                <button class="view-btn" data-view="console">Console</button>
+            </div>
+            <div class="users-grid" id="users-container" style="display: none;"></div>
+            <table class="users-table" id="users-table">
+                <thead>
+                    <tr>
+                        <th style="width: 180px;">Utilisateur</th>
+                        <th style="width: 100px;">Téléphone</th>
+                        <th style="width: 80px;">Type</th>
+                        <th style="width: 120px;">État</th>
+                        <th style="width: 100px;">Tâche</th>
+                        <th style="width: 80px;">Connexion</th>
+                        <th style="width: 120px;">Session</th>
+                        <th style="width: 60px;">Mode</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body"></tbody>
+            </table>
+            <div class="console-container" id="console-container" style="display: none;">
+                <div class="console-header">
+                    <span class="console-title">Historique des Appels CCXML</span>
+                    <div class="console-controls">
+                        <button class="console-btn" id="console-pause">Pause</button>
+                        <button class="console-btn" id="console-clear">Clear</button>
+                        <button class="console-btn" id="console-refresh">Refresh</button>
+                    </div>
+                </div>
+                <div class="console-stats">
+                    <div class="console-stat">
+                        <span>Total:</span>
+                        <span class="console-stat-num" id="console-total">0</span>
+                    </div>
+                    <div class="console-stat">
+                        <span>Agent:</span>
+                        <span class="console-stat-num" id="console-agent">0</span>
+                    </div>
+                    <div class="console-stat">
+                        <span>Queue:</span>
+                        <span class="console-stat-num" id="console-queue">0</span>
+                    </div>
+                </div>
+                <div class="console-output" id="console-output"></div>
+            </div>
+        </div>
+        
+        <div id="queues-tab" class="tab-content">
+            <table class="queues-table">
+                <thead>
+                    <tr>
+                        <th>Queue</th>
+                        <th>Logged</th>
+                        <th>Working</th>
+                        <th>Waiting</th>
+                    </tr>
+                </thead>
+                <tbody id="queues-container"></tbody>
+            </table>
+        </div>
+        
+        <div id="calls-tab" class="tab-content">
+            <div id="calls-container" class="calls-list"></div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        Dernière mise à jour: <span id="last-update">--</span>
+    </div>
+    
+    <!-- User Detail Modal -->
+    <div class="modal-overlay" id="user-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <div class="modal-avatar" id="modal-avatar">--</div>
+                    <span id="modal-username">Utilisateur</span>
+                </div>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <div class="modal-section-title">Informations générales</div>
+                    <div class="modal-row">
+                        <span class="modal-label">Type</span>
+                        <span class="modal-value" id="modal-type">-</span>
+                    </div>
+                    <div class="modal-row">
+                        <span class="modal-label">Téléphone</span>
+                        <span class="modal-value phone" id="modal-phone">-</span>
+                    </div>
+                    <div class="modal-row">
+                        <span class="modal-label">Login</span>
+                        <span class="modal-value" id="modal-login">-</span>
+                    </div>
+                    <div class="modal-row">
+                        <span class="modal-label">Profile</span>
+                        <span class="modal-value" id="modal-profile">-</span>
+                    </div>
+                </div>
+                
+                <div class="modal-section">
+                    <div class="modal-section-title">État actuel</div>
+                    <div class="modal-row">
+                        <span class="modal-label">État</span>
+                        <span class="modal-value state" id="modal-state">-</span>
+                    </div>
+                    <div class="modal-row">
+                        <span class="modal-label">Tâche</span>
+                        <span class="modal-value" id="modal-task">-</span>
+                    </div>
+                    <div class="modal-row">
+                        <span class="modal-label">Mode</span>
+                        <span class="modal-value" id="modal-mode">-</span>
+                    </div>
+                </div>
+                
+                <div class="modal-section">
+                    <div class="modal-section-title">Session</div>
+                    <div class="modal-row">
+                        <span class="modal-label">Session ID</span>
+                        <span class="modal-value" id="modal-session" style="font-family: monospace; font-size: 10px;">-</span>
+                    </div>
+                    <div class="modal-row">
+                        <span class="modal-label">Connexion</span>
+                        <span class="modal-value duration" id="modal-duration">-</span>
+                    </div>
+                    <div class="modal-row">
+                        <span class="modal-label">Heure de connexion</span>
+                        <span class="modal-value" id="modal-login-time">-</span>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="modal-btn primary" id="modal-message">Envoyer message</button>
+                    <button class="modal-btn" id="modal-hangup">Raccrocher</button>
+                    <button class="modal-btn" id="modal-pause">Mettre en pause</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const POLL_INTERVAL = 5000;
+        
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+            });
+        });
+        
+        // Add search and filter event listeners
+        document.getElementById('search-input').addEventListener('input', fetchData);
+        document.getElementById('state-filter').addEventListener('change', fetchData);
+        document.getElementById('type-filter').addEventListener('change', fetchData);
+        
+        // View toggle functionality
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const view = btn.dataset.view;
+                document.getElementById('users-container').style.display = 'none';
+                document.getElementById('users-table').style.display = 'none';
+                document.getElementById('console-container').style.display = 'none';
+                
+                if (view === 'table') {
+                    document.getElementById('users-table').style.display = 'table';
+                } else if (view === 'grid') {
+                    document.getElementById('users-container').style.display = 'grid';
+                } else if (view === 'console') {
+                    document.getElementById('console-container').style.display = 'block';
+                }
+                
+                fetchData(); // Refresh data with new view
+            });
+        });
+        
+        // Initialize console
+        initConsole();
+        initModal();
+        
+        // View toggle functionality
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const view = btn.dataset.view;
+                document.getElementById('users-table').style.display = 'none';
+                document.getElementById('console-container').style.display = 'none';
+                
+                if (view === 'table') {
+                    document.getElementById('users-table').style.display = 'table';
+                } else if (view === 'console') {
+                    document.getElementById('console-container').style.display = 'block';
+                }
+                
+                fetchData(); // Refresh data with new view
+            });
+        });
+        
+        function fetchData() {
+            fetch('/api/all')
+                .then(r => r.json())
+                .then(updateDashboard)
+                .catch(e => console.error('Erreur:', e));
+        }
+        
+        function updateDashboard(data) {
+            const badge = document.getElementById('status-badge');
+            badge.className = 'status-badge ' + (data.connected ? 'status-connected' : 'status-disconnected');
+            badge.textContent = data.connected ? 'Connecté' : 'Déconnecté';
+            
+            document.getElementById('stat-total').textContent = data.stats?.total_users || 0;
+            document.getElementById('stat-supervisors').textContent = data.stats?.supervisors || 0;
+            document.getElementById('stat-agents').textContent = data.stats?.agents || 0;
+            document.getElementById('stat-logged').textContent = data.stats?.logged_in || 0;
+            document.getElementById('users-count').textContent = data.users?.length || 0;
+            document.getElementById('queues-count').textContent = data.queues?.length || 0;
+            document.getElementById('calls-count').textContent = data.call_history?.length || 0;
+            
+            updateUsers(data.users || []);
+            updateQueues(data.queues || []);
+            updateCalls(data.call_history || []);
+            
+            if (data.last_update) {
+                document.getElementById('last-update').textContent = new Date(data.last_update).toLocaleString('fr-FR');
+            }
+        }
+        
+        function filterUsers(users) {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const stateFilter = document.getElementById('state-filter').value;
+            const typeFilter = document.getElementById('type-filter').value;
+            
+            return users.filter(user => {
+                // Search filter
+                const matchesSearch = !searchTerm || 
+                    (user.name && user.name.toLowerCase().includes(searchTerm)) ||
+                    (user.phone && user.phone.toLowerCase().includes(searchTerm)) ||
+                    (user.session_id && user.session_id.toLowerCase().includes(searchTerm)) ||
+                    (user.login && user.login.toLowerCase().includes(searchTerm));
+                
+                // State filter
+                const matchesState = !stateFilter || 
+                    (user.state && user.state.toLowerCase().includes(stateFilter));
+                
+                // Type filter
+                const matchesType = !typeFilter || 
+                    (user.type && user.type.toLowerCase().includes(typeFilter));
+                
+                return matchesSearch && matchesState && matchesType;
+            });
+        }
+        
+        function updateUsers(users) {
+            const filteredUsers = filterUsers(users);
+            
+            if (filteredUsers.length === 0) {
+                document.getElementById('users-table-body').innerHTML = '<tr><td colspan="8" class="empty-state">Aucun utilisateur trouvé</td></tr>';
+                return;
+            }
+
+            // Update table view
+            document.getElementById('users-table-body').innerHTML = filteredUsers.map(user => {
+                const typeClass = user.type || 'agent';
+                const stateClass = getStateClass(user.state || '');
+                const initials = (user.name || 'U').substring(0, 2).toUpperCase();
+                
+                const userJson = JSON.stringify(user).replace(/"/g, '&quot;');
+                
+                return `
+                    <tr onclick="openModal(${userJson})" style="cursor: pointer;">
+                        <td>
+                            <div class="table-name-cell">
+                                <div class="user-avatar ${typeClass}" style="width: 20px; height: 20px; font-size: 8px;">${initials}</div>
+                                <div>
+                                    <div>${user.name || 'N/A'}</div>
+                                    <div class="table-phone">${user.login || ''}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="table-phone">${user.phone || '-'}</td>
+                        <td><span class="user-badge state">${user.type || 'agent'}</span></td>
+                        <td><span class="table-state ${stateClass}">${formatState(user.state || 'N/A')}</span></td>
+                        <td class="table-phone">${user.last_task_display_name || '-'}</td>
+                        <td class="table-duration">${user.login_duration_formatted || '-'}</td>
+                        <td class="table-session" title="${user.session_id || ''}">${user.session_id ? user.session_id.substring(0, 12) + '...' : '-'}</td>
+                        <td><span class="user-badge mode">${user.mode || '-'}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function updateQueues(queues) {
+            const container = document.getElementById('queues-container');
+            if (queues.length === 0) {
+                container.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune queue</td></tr>';
+                return;
+            }
+            
+            container.innerHTML = queues.map(queue => `
+                <tr>
+                    <td>${queue.display_name || queue.name || 'N/A'}</td>
+                    <td><span class="queue-stat logged">${queue.logged || 0}</span></td>
+                    <td><span class="queue-stat working">${queue.working || 0}</span></td>
+                    <td><span class="queue-stat waiting">${queue.waiting || 0}</span></td>
+                </tr>
+            `).join('');
+        }
+        
+        function updateCalls(calls) {
+            const container = document.getElementById('calls-container');
+            
+            if (!calls || calls.length === 0) {
+                container.innerHTML = '<div class="empty-state">Aucun appel dans l\'historique</div>';
+                return;
+            }
+            
+            container.innerHTML = calls.map(call => {
+                const queueType = call.queue_type || 'unknown';
+                const typeClass = queueType === 'user' ? 'incoming' : (queueType === 'outbound' ? 'outgoing' : 'state');
+                const typeIcon = queueType === 'user' ? '📞' : (queueType === 'outbound' ? '📤' : '📋');
+                
+                const dateStr = call.start_date || '';
+                const timeStr = call.start_time || '--:--:--';
+                const queueName = call.queue_display_name || 'N/A';
+                const totalDuration = call.total_duration || '-';
+                const waitingDuration = call.waiting_duration || '-';
+                const managingDuration = call.managing_duration || '-';
+                const postMgmtDuration = call.post_management_duration || '-';
+                const agent = call.manager_login || '-';
+                const caller = call.caller || '-';
+                const callee = call.callee || '-';
+                
+                return `
+                    <div class="call-card" style="flex-direction: column; gap: 8px; padding: 12px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="call-icon ${typeClass}" style="width: 28px; height: 28px; font-size: 12px;">${typeIcon}</div>
+                                <div>
+                                    <div class="call-numbers" style="font-weight: 600;">${queueName}</div>
+                                    <div style="font-size: 10px; color: #8b949e;">Agent: ${agent}</div>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="call-time">${dateStr} ${timeStr}</div>
+                                <div style="font-size: 10px; color: #7ee787;">Total: ${totalDuration}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 15px; font-size: 10px; color: #8b949e;">
+                            <div><span style="color: #58a6ff;">Caller:</span> ${caller}</div>
+                            <div><span style="color: #d29922;">Callee:</span> ${callee}</div>
+                        </div>
+                        <div style="display: flex; gap: 10px; font-size: 10px;">
+                            <div style="background: #21262d; padding: 4px 8px; border-radius: 4px;">
+                                <span style="color: #f85149;">Attente:</span> <span style="color: #c9d1d9;">${waitingDuration}</span>
+                            </div>
+                            <div style="background: #21262d; padding: 4px 8px; border-radius: 4px;">
+                                <span style="color: #7ee787;">Conversation:</span> <span style="color: #c9d1d9;">${managingDuration}</span>
+                            </div>
+                            ${postMgmtDuration !== '0s' ? `
+                            <div style="background: #21262d; padding: 4px 8px; border-radius: 4px;">
+                                <span style="color: #a371f7;">Post-traitement:</span> <span style="color: #c9d1d9;">${postMgmtDuration}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Console functionality for Call History
+        let consolePaused = false;
+        let callHistory = [];
+        const MAX_CONSOLE_LINES = 100;
+        
+        function initConsole() {
+            document.getElementById('console-pause').addEventListener('click', function() {
+                consolePaused = !consolePaused;
+                this.textContent = consolePaused ? 'Reprendre' : 'Pause';
+                this.style.color = consolePaused ? '#f85149' : '#8b949e';
+            });
+            
+            document.getElementById('console-clear').addEventListener('click', function() {
+                callHistory = [];
+                document.getElementById('console-output').innerHTML = '';
+                updateConsoleStats();
+            });
+            
+            document.getElementById('console-refresh').addEventListener('click', function() {
+                fetchData();
+            });
+        }
+        
+        function formatTime(dateStr) {
+            if (!dateStr || dateStr === 'None') return '--:--:--';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            } catch (e) {
+                return '--:--:--';
+            }
+        }
+        
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === 'None') return '';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
+            } catch (e) {
+                return '';
+            }
+        }
+        
+        function updateConsole(callHistoryData) {
+            if (!callHistoryData || callHistoryData.length === 0) {
+                document.getElementById('console-output').innerHTML = '<div class="console-empty">Aucun appel dans l\'historique</div>';
+                updateConsoleStats();
+                return;
+            }
+            
+            // Update call history
+            callHistory = callHistoryData;
+            
+            if (consolePaused) return;
+            
+            const container = document.getElementById('console-output');
+            const isScrolledToBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
+            
+            // Render call history
+            container.innerHTML = callHistory.map(call => formatCallLine(call)).join('');
+            
+            // Auto-scroll to bottom if was already at bottom
+            if (isScrolledToBottom) {
+                container.scrollTop = container.scrollHeight;
+            }
+            
+            updateConsoleStats();
+        }
+        
+        function updateConsoleStats() {
+            if (!callHistory || callHistory.length === 0) {
+                document.getElementById('console-total').textContent = '0';
+                document.getElementById('console-agent').textContent = '0';
+                document.getElementById('console-queue').textContent = '0';
+                return;
+            }
+            
+            const agentCalls = callHistory.filter(c => c.queue_type === 'user').length;
+            const queueCalls = callHistory.filter(c => c.queue_type === 'queue').length;
+            
+            document.getElementById('console-total').textContent = callHistory.length;
+            document.getElementById('console-agent').textContent = agentCalls;
+            document.getElementById('console-queue').textContent = queueCalls;
+        }
+        
+        function formatCallLine(call) {
+            const startDate = formatDate(call.start_date);
+            const startTime = formatTime(call.start_date);
+            const queueType = call.queue_type || 'unknown';
+            const queueName = call.queue_display_name || 'N/A';
+            const duration = call.duration || '-';
+            const agent = call.manager_login || '-';
+            
+            let typeClass = 'ended';
+            let typeLabel = queueType === 'user' ? 'AGENT' : 'QUEUE';
+            
+            return `
+                <div class="console-line">
+                    <span class="console-time">${startDate} ${startTime}</span>
+                    <span class="console-type ${typeClass}">${typeLabel}</span>
+                    <span class="console-queue">${queueName}</span>
+                    <span class="console-agent">${agent}</span>
+                    <span class="console-duration">${duration}</span>
+                </div>
+            `;
+        }
+        
+        // Modal functionality
+        let currentUser = null;
+        
+        function openModal(user) {
+            try {
+                if (typeof user === 'string') {
+                    user = JSON.parse(user);
+                }
+            } catch (e) {
+                console.error('Error parsing user:', e);
+                return;
+            }
+            
+            currentUser = user;
+            const initials = (user.name || 'U').substring(0, 2).toUpperCase();
+            const typeClass = user.type || 'agent';
+            
+            document.getElementById('modal-avatar').className = `modal-avatar ${typeClass}`;
+            document.getElementById('modal-avatar').textContent = initials;
+            document.getElementById('modal-username').textContent = user.name || 'N/A';
+            document.getElementById('modal-type').textContent = user.type || 'agent';
+            document.getElementById('modal-phone').textContent = user.phone || '-';
+            document.getElementById('modal-login').textContent = user.login || '-';
+            document.getElementById('modal-profile').textContent = user.profile || '-';
+            
+            const stateClass = getStateClass(user.state || '');
+            const stateText = formatState(user.state || 'N/A');
+            document.getElementById('modal-state').className = `modal-value state ${stateClass}`;
+            document.getElementById('modal-state').textContent = stateText;
+            document.getElementById('modal-task').textContent = user.last_task_display_name || '-';
+            document.getElementById('modal-mode').textContent = user.mode || '-';
+            
+            document.getElementById('modal-session').textContent = user.session_id || '-';
+            document.getElementById('modal-duration').textContent = user.login_duration_formatted || '-';
+            document.getElementById('modal-login-time').textContent = user.login_time || '-';
+            
+            document.getElementById('user-modal').classList.add('active');
+        }
+        
+        window.openModal = openModal;
+        window.closeModal = closeModal;
+        
+        function closeModal() {
+            document.getElementById('user-modal').classList.remove('active');
+            currentUser = null;
+        }
+        
+        function initModal() {
+            document.getElementById('modal-close').addEventListener('click', closeModal);
+            document.getElementById('user-modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('user-modal')) {
+                    closeModal();
+                }
+            });
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeModal();
+            });
+        }
+        
+        function getStateClass(state) {
+            state = (state || '').toLowerCase();
+            if (state.includes('supervisor')) return 'supervisor';
+            if (state.includes('pause')) return 'pause';
+            if (state.includes('outbound')) return 'outbound';
+            if (state.includes('ringing')) return 'ringing';
+            if (state.includes('busy') || state.includes('plugged')) return 'busy';
+            if (state.includes('unplug')) return 'unplugged';
+            return '';
+        }
+        
+        function formatState(state) {
+            state = (state || '').toLowerCase();
+            if (state.includes('supervisor unplug')) return 'Sup. déconnecté';
+            if (state.includes('supervisor interface')) return 'Sup. interface';
+            if (state.includes('supervisor plugged')) return 'Sup. connecté';
+            if (state.includes('unplug')) return 'Déconnecté';
+            if (state.includes('pause')) return 'Pause';
+            if (state.includes('outbound')) return 'Sortant';
+            if (state.includes('ringing')) return 'Sonne';
+            if (state.includes('busy')) return 'Occupé';
+            if (state.includes('plugged')) return "Traitement";
+            return state || 'N/A';
+        }
+        
+        function formatTime(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split(' ');
+            if (parts.length >= 2) {
+                return parts[1];
+            }
+            return dateStr;
+        }
+        
+        setInterval(fetchData, POLL_INTERVAL);
+        fetchData();
+    </script>
+</body>
+</html>
