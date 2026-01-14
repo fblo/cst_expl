@@ -1,0 +1,1 @@
+(for server in `ssh XXX@XXX "ls /data"`; do for project in `ssh XXX@XXX "ls /data/$server/opt/consistent/logs | grep -v \"licences\|summary\|Default\""`; do echo $server $project; done; done) > plog.db

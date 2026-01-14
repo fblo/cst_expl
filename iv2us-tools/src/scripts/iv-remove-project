@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+source iv-static-ports >/dev/null 2>&1 \
+	|| (echo "Couldn't find \`iv-static-ports'. Exiting." && exit 2)
+
+source iv-restart-modules >/dev/null 2>&1 \
+	|| (echo "Couldn't find \`iv-restart-modules'. Exiting." && exit 2)
+
+project_exists() {
+	local project_name="$1"
+	"get_projects" | grep -E "^$project_name\$" >/dev/null 2>&1
+}
+
+ccc_rm() {
+	ccc_update 20000 -rmnode $@
+}
+
+clean_voip_configuration() {
+	local project_name="$1"
+	local config_path="$(get_path_for_process Voip_1 Main)"
+
+	get_file "$config_path"
+
+	sed -i "s/.*project_name=\"$project_name\".*//" $(get_local_filename "$config_path")
+
+	put_file "$config_path"
+}
+
+clean_entrypoints() {
+	local project_name="$1"
+	local config_path="/db/projects/Main/Voip.xml"
+
+	get_file "$config_path"
+
+	sed -i "s/.*project_name=\"$project_name\".*//" $(get_local_filename "$config_path")
+
+	put_file "$config_path"
+}
+
+clean_store() {
+	local project_name="$1"
+	local current_base_user="$base_user"
+	export base_user="ccc"
+
+	if [[ ! -z "$project_name" ]]; then
+		remote_command "$server_address" "rm -rf /opt/consistent/db/store/$project_name"
+	fi
+
+	export base_user="$current_base_user"
+}
+
+main() {
+	init_globals
+	check_binaries
+
+	local current_dir="$(pwd)"
+	local tmpdir=$(mktemp -d)
+	cd "$tmpdir"
+
+	export server_address="$1"
+	local project="$2"
+	local project_path="/db/projects/$project"
+
+	if ! project_exists "$project"; then
+		die "Project \`$project' doesn't exist on this server."
+	else
+		debug "Remove project: \`$project'"
+	fi
+
+	user_confirm "This will permanently remove the project from the server!"
+
+	local project_path="/db/projects/$project"
+	debug "Removing $project_path."
+	ccc_rm "$project_path"
+
+	debug "Cleaning Voip_1 configuration."
+	clean_voip_configuration "$project"
+
+	debug "Cleaning entrypoints."
+	clean_entrypoints "$project"
+
+	debug "Cleaning store."
+	clean_store "$project"
+
+	delete_caches
+	cd "$current_dir"
+	rm -rf "$tmpdir"
+}
+
+show_help() {
+	cat << EOF
+Usage: ${0##*/} [-h] [-s SERVER] PROJECT
+
+Remove an existing project from an IV2US vocal node. If SERVER is provided, use
+that address instead of \`localhost' to talk to the server.
+
+Positional arguments:
+    PROJECT   the name of the project that should be removed.
+
+Options:
+    -h        display this help message and exit.
+    -s SERVER specify the address of the server to which we should connect. If
+              not provided, this will default to \`localhost'.
+EOF
+}
+
+if [[ $0 =~ iv-remove-project ]]; then
+	server="localhost"
+
+	while getopts "hs:" opt; do
+		case "$opt" in
+			h)
+				show_help
+				exit 0
+				;;
+
+			s)
+				server="$OPTARG"
+				;;
+
+			'?')
+				show_help >&2
+				exit 1
+				;;
+		esac
+	done
+
+	project="${@:$OPTIND:1}"
+
+	if [[ $project == "" ]]; then
+		die "The PROJECT argument is required."
+	fi
+
+	main "$server" "$project"
+fi

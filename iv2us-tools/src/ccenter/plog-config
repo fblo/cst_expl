@@ -1,0 +1,19 @@
+#!/bin/bash
+
+USAGE='Usage: plog-config PROJET 
+	Affiche la configuration applicative Ccxml.xml du PROJET.
+	Trouve le serveur à partir des logs du serveur de médiation.
+'
+
+
+if [[ "$1" == "-h" || ( $# -ne 1 ) ]]
+then
+    echo -e "$USAGE"
+    exit 1
+fi
+
+projet=$1
+mois=$(date --date="$(date +%Y-%m-01) - 1 month" +%Y%m)
+
+from=$(ssh mediation@vs-ics-prd-stm-fr-503 "./logsdir $projet $mois")   
+ccc_cat /db/projects/$projet/Ccxml.xml $(basename $from)

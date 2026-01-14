@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+
+source iv-static-ports >/dev/null 2>&1 \
+	|| (echo "Couldn't find \`iv-static-ports'. Exiting." && exit 2)
+
+get_next_file_id() {
+	if [ -z "$_id" ]; then
+		_id=1
+	fi
+
+	while grep -q "id=\"_$_id\"" "$1"; do
+		_id=$(($_id + 1))
+	done
+
+	echo "_$_id"
+}
+
+get_sounds_setting() {
+	local filename="$1"
+	local setting="$2"
+	local value=""
+
+	while read flag; do
+		if [[ "$value" == "" ]]; then
+			value="$flag"
+			echo "$1: $value"
+
+		elif [[ "$value" != "$flag" ]]; then
+			echo "WARNING: multiple flags found ($flag)"
+
+		fi
+	done <<< "$(grep " name=\"$setting\" " "$filename" | grep -o -E "value=\"[a-zA-Z_-]+" | awk -F'"' '{ print $2 }')"
+}
+
+get_sounds_settings() {
+	local local_filename="$_tmp_dir/Ccxml.xml"
+	ccc_cat "/db/projects/$1/Ccxml.xml" > $local_filename
+
+	get_sounds_setting "$local_filename" 'sounds_country_cfg'
+	get_sounds_setting "$local_filename" 'sounds_language_cfg'
+}
+
+set_sounds_setting() {
+	local filename="$1"
+	local setting="$2"
+	local value="$3"
+
+	if [[ $(grep -c " name=\"$setting\" " "$filename") > 0 ]]; then
+		echo "Updating $setting"
+		sed -i -E "s/ name=\"$setting\" value=\"[a-zA-Z_-]+\"/ name=\"$setting\" value=\"$value\"/g" "$filename"
+	fi
+
+	if [[ $(sed -n '/<entries_values>/,/<\/entries_values>/ p' "$filename" | grep -c " name=\"$setting\" ") == 0 ]]; then
+		echo "Adding entries value $setting"
+		sed -i '/<entries_values>/ a\
+		<com.consistent.protocol.consistent_protocol_named_object_value_string id="'$(get_next_file_id $filename)'" name="'$setting'" value="'$value'"/>' "$filename"
+	fi
+}
+
+set_sounds_settings() {
+	local remote_filename="/db/projects/$1/Ccxml.xml"
+	local local_filename="$_tmp_dir/Ccxml.xml"
+	local country="$2"
+	local language="$3"
+	ccc_cat "$remote_filename" > "$local_filename"
+
+	if [[ $(grep -c '<entries_values>' "$local_filename") == 0 ]]; then
+		echo "Inserting entries"
+		sed -i '/<entrys>/ i\
+	<entries_values>\n	</entries_values>' "$local_filename"
+	fi
+
+	if [[ "$country" != "" ]]; then
+		set_sounds_setting "$local_filename" "sounds_country_cfg" "$country"
+	fi
+
+	if [[ "$language" != "" ]]; then
+		set_sounds_setting "$local_filename" "sounds_language_cfg" "$language"
+	fi
+
+	ccc_update 20000 -path "$remote_filename" -file "$local_filename"
+}
+
+if [[ $0 =~ iv-sounds-settings ]]; then
+	server="localhost"
+	country=""
+	language=""
+
+	while getopts "hs:c:l:" opt; do
+		case "$opt" in
+			h)
+				show_help
+				exit 0
+				;;
+
+			s)
+				server="$OPTARG"
+				;;
+
+			c)
+				country="$OPTARG"
+				;;
+
+			l)
+				language="$OPTARG"
+				;;
+
+			'?')
+				show_help >&2
+				exit 1
+				;;
+		esac
+	done
+
+	project="${@:$OPTIND:1}"
+
+	if [[ $project == "" ]]; then
+		die "The PROJECT argument is required."
+	fi
+
+	export server_address="$server"
+
+	init_globals
+	check_binaries
+
+	if [[ "$country" == "" && "$language" == "" ]]; then
+		get_sounds_settings "$project"
+	else
+		set_sounds_settings "$project" "$country" "$language"
+	fi
+
+	delete_caches
+fi

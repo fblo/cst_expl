@@ -1,0 +1,396 @@
+#!/usr/bin/env bash
+
+port_range_start=20000
+port_range_end=22980
+ports_per_project=20
+
+log() {
+	local level="$1"
+	shift
+	echo "$(date -Is) - [$level] - $@"
+}
+
+debug() {
+	log DEBUG "$@"
+}
+
+info() {
+	log INFO "$@"
+}
+
+error() {
+	log ERROR "$@" 1>&2;
+}
+
+warn() {
+	log WARN "$@" 1>&2;
+}
+
+die() {
+	error "$@";
+	exit -1;
+}
+
+user_confirm() {
+	local prompt="$1"
+	local token="$(date -Is) $project $USER"
+
+	warn "$prompt"
+	echo
+	echo "Please copy the following token to CONFIRM (proceed): $token"
+	read confirm
+	echo
+
+	if [[ $token != $confirm ]]; then
+		die "Confirmation failed."
+	else
+		debug "User confirmed, continuing."
+	fi
+}
+
+init_globals() {
+	_tmp_dir=$(mktemp -d)
+	_projects_cache="$_tmp_dir/projects"
+	_ports_range_cache="$_tmp_dir/ports_range"
+	_projects_using_dynamic_ports="$_tmp_dir/dynamic_ports"
+
+	touch $_projects_cache $_ports_range_cache $_projects_using_dynamic_ports
+}
+
+delete_caches() {
+	rm -rf $_tmp_dir
+}
+
+check_binaries() {
+	local binaries="ccenter_update"
+
+	for binary in $binaries; do
+		type "$binary" >/dev/null 2>&1 || die "Could not find \`$binary'."
+	done
+}
+
+ccc_update() {
+	ccenter_update -login admin -password admin -server $server_address $@
+}
+
+ccc_ls() {
+	ccc_update 20000 -children $@ |  sed -r 's/\|$//' 
+}
+
+ccc_cat() {
+	ccc_update 20000 -content $@
+}
+
+get_projects() {
+	local projects="$(cat $_projects_cache)"
+	if [ ! -n "${projects}" ]; then
+		projects=$(ccc_ls /db/projects)
+		echo "$projects" > $_projects_cache
+	fi
+	echo "$projects"
+}
+
+get_processes() {
+	local project=$1
+	if [[ $project == "Main" ]]; then
+		ccc_ls "/db/projects/Main/processes/consistent_1/Head_Main"
+	else
+		ccc_ls "/db/projects/$project/processes/consistent_1/Head_Main/Head_$project"
+		echo "Head_$project"
+	fi
+}
+
+get_path_for_process() {
+	local process="$1"
+	local project="$2"
+	local path="/db/projects/$project/processes/consistent_1/Head_Main"
+
+	if [[ $project == "Main" ]]; then
+		if [[ $process != "Head_Main" ]]; then
+			path="$path/$process"
+		fi
+
+	else
+		path="$path/Head_$project"
+		if [[ $process != "Head_$project" ]]; then
+			path="$path/$process"
+		fi
+	fi
+
+	echo "$path"
+}
+
+get_process_type() {
+	local process="$1"
+	local project="$2"
+
+	ccc_cat "$(get_path_for_process "$process" "$project")" | \
+		grep -o -E 'process_name="[^"]+' | \
+		grep -o -E '[a-zA-Z0-9_]+$' 
+}
+
+get_port_for_process() {
+	local process="$1"
+	local project="$2"
+	local base_port="$3"
+
+	case "$process" in
+		consistent_head)
+			if [[ $project == "Main" ]]; then echo 20000;
+			else echo $(($base_port))
+			fi;;
+
+		ccenter_voip)
+			echo 20001;;
+
+		ccenter_update_server)
+			echo 23000;;
+
+		ccenter_tts_acapela*)
+			echo 20002;;
+
+		ccenter_proxy)
+			echo $((base_port + 1));;
+
+		ccenter_ccxml)
+			echo $((base_port + 2));;
+
+		ccenter_dispatch)
+			echo $((base_port + 3));;
+
+		ccenter_queues)
+			echo $((base_port + 4));;
+
+		consistent_logger)
+			echo $((base_port + 5));;
+
+		consistent_mysql_ws)
+			echo $((base_port + 6));;
+
+		ccenter_scheduler)
+			echo $((base_port + 7));;
+
+		consistent_store)
+			echo $((base_port + 8));;
+	esac
+}
+
+get_local_filename() {
+	local path="$1"
+	echo $(basename "$path")
+}
+
+get_file() {
+	local path="$1"
+	local filename=$(get_local_filename "$path")
+
+	ccc_cat "$path" > "$filename"
+}
+
+put_file() {
+	local path="$1"
+	local filename="$(get_local_filename "$path")"
+
+	ccc_update 20000 -path "$path" -file "$filename" -create
+}
+
+change_process_port() {
+	local process="$1"
+	local project="$2"
+	local new_port="$3"
+
+	local config_path="$(get_path_for_process "$process" "$project")"
+	local config_filename="$(get_local_filename "$config_path")"
+	get_file "$config_path"
+	
+	local current_port=$(grep -o -E 'listen_port="[0-9]+"' "$config_filename" \
+		| grep -o -E '[0-9]+')
+
+	if [[ $current_port != $new_port ]]; then
+
+		if [[ $current_port == 0 ]]; then
+			current_port_display="0 (dynamic)"
+		else
+			current_port_display="$current_port (fixed)"
+		fi
+		info "Updating process $project/$process listen port from $current_port_display to $new_port (fixed)."
+
+		sed -i "s/listen_port=\"$current_port\"/listen_port=\"$new_port\"/" "$config_filename"
+		put_file "$config_path"
+	fi
+	
+	rm -rf "$config_filename"
+}
+
+show_help() {
+	cat << EOF
+Usage: ${0##*/} [-h] [-s SERVER] [-p PROJECT]
+
+Convert an IV2US vocal node to use static ports configuration instead of dynamic
+ports. If SERVER is provided, use that address instead of \`localhost' to talk
+to the server. If PROJECT is provided, only that specific project will be
+converted.
+
+    -h         display this help message and exit.
+    -s SERVER  specify the address of the server to which we should connect. If
+               not provided, this will default to \`localhost'.
+    -p PROJECT specify the project that should be converted to use fixed ports.
+               If not provided, the script will convert all the projects it
+               finds on the server.
+EOF
+}
+
+get_available_ports() {
+	local ports_range=$(cat $_ports_range_cache)
+	if [ ! -n "${ports_range}" ]; then
+		local projects="$(get_projects)"
+
+		seq $port_range_start $ports_per_project $port_range_end \
+			> $_ports_range_cache
+
+		for project in $projects; do
+			local config_path="$(get_path_for_process "Head_$project" "$project")"
+			local config_filename="$(get_local_filename "$config_path")"
+			get_file "$config_path"
+
+			local current_port=$(grep -o -E 'listen_port="[0-9]+"' \
+				"$config_filename" | grep -o -E '[0-9]+')
+
+			rm -rf "$config_filename"
+
+			if [[ $current_port =~ [0-9]{5} ]]; then
+				reserve_port "$current_port"
+			elif [[ $current_port == 0 ]]; then
+				echo "$project" >> $_projects_using_dynamic_ports
+			fi
+		done
+	fi
+
+	cat $_ports_range_cache
+}
+
+reserve_port() {
+	local port="$1"
+	sed -i -r "/^$port ?/d" $_ports_range_cache
+}
+
+get_next_available_port() {
+	local port=$(echo $(get_available_ports) | awk '{ print $1 }')
+	reserve_port "$port"
+	echo $port
+}
+
+get_projects_using_dynamic_ports() {
+	cat $_projects_using_dynamic_ports
+}
+
+process_uses_static_ports() {
+	local project="$1"
+	local process="$2"
+
+	local current_port="$(get_current_process_port "$project" "$process")"
+
+	if [[ $current_port == 0 ]]; then
+		return 1
+	else
+		return 0
+	fi
+}
+
+get_current_process_port() {
+	local project="$1"
+	local process="$2"
+
+	local config_path="$(get_path_for_process "$process" "$project")"
+	local config_filename="$(get_local_filename "$config_path")"
+	get_file "$config_path"
+
+	current_port="$(grep -o -E 'listen_port="[0-9]+"' "$config_filename" | \
+		grep -o -E '[0-9]+')"
+
+	rm -rf "$config_filename"
+
+	echo "$current_port"
+}
+
+get_current_project_base_port() {
+	local project="$1"
+	get_current_process_port "$project" "Head_$project"
+}
+
+project_uses_static_ports() {
+	local project="$1"
+	process_uses_static_ports "$project" "Head_$project"
+}
+
+proxy_uses_static_ports() {
+	local project="$1"
+	process_uses_static_ports "$project" "Proxy"
+}
+
+main() {
+	init_globals
+	check_binaries
+
+	export server_address="$1"
+
+	if [ -n "${2}" ]; then
+		local projects="$2"
+	else
+		local projects=$(get_projects)
+	fi
+
+	user_confirm "This will permanently change the configuration of all processes!"
+
+	for project in $projects; do
+		if ! project_uses_static_ports "$project"; then
+			local project_base_port=$(get_next_available_port)
+			local processes=$(get_processes "$project")
+
+			for process_name in $processes; do
+				local process_type=$(get_process_type "$process_name" "$project")
+				local port=$(get_port_for_process "$process_type" "$project" \
+					"$project_base_port")
+				change_process_port "$process_name" "$project" "$port"
+			done
+		elif [[ $project != "Main" ]] && ! proxy_uses_static_ports "$project";
+		then
+			local project_base_port="$(get_current_project_base_port "$project")"
+			local process_type="$(get_process_type "Proxy" "$project")"
+			local port="$(get_port_for_process "$process_type" "$project" \
+				"$project_base_port")"
+			change_process_port "Proxy" "$project" "$port"
+		fi
+	done
+
+	delete_caches
+}
+
+if [[ $0 =~ iv-static-ports ]]; then
+	server="localhost"
+	project=""
+
+	while getopts "hs:p:" opt; do
+		case "$opt" in
+			h)
+				show_help
+				exit 0
+				;;
+
+			s)
+				server="$OPTARG"
+				;;
+
+			p)
+				project="$OPTARG"
+				;;
+
+			'?')
+				show_help >&2
+				exit 1
+				;;
+		esac
+	done
+
+	main "$server" "$project"
+fi

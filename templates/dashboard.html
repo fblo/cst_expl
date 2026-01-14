@@ -162,309 +162,6 @@
             margin-bottom: 10px;
         }
         
-        .view-btn {
-            padding: 4px 8px;
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #8b949e;
-            font-size: 10px;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-        
-        .view-btn:hover {
-            color: #c9d1d9;
-            border-color: #58a6ff;
-        }
-        
-        .view-btn.active {
-            background: #58a6ff;
-            color: #0d1117;
-            border-color: #58a6ff;
-        }
-        
-        .console-container {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 11px;
-            overflow: hidden;
-        }
-        
-        .console-header {
-            background: #161b22;
-            padding: 6px 10px;
-            border-bottom: 1px solid #30363d;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .console-title {
-            color: #8b949e;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        
-        .console-controls {
-            display: flex;
-            gap: 5px;
-        }
-        
-        .console-btn {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #8b949e;
-            padding: 2px 6px;
-            font-size: 10px;
-            cursor: pointer;
-            border-radius: 3px;
-        }
-        
-        .console-btn:hover {
-            color: #c9d1d9;
-        }
-        
-        .console-output {
-            height: 450px;
-            overflow-y: auto;
-            padding: 8px 10px;
-            background: #0d1117;
-        }
-        
-        .console-line {
-            display: flex;
-            gap: 10px;
-            padding: 3px 0;
-            line-height: 1.4;
-            border-bottom: 1px solid #161b22;
-        }
-        
-        .console-line:hover {
-            background: #161b22;
-        }
-        
-        .console-time {
-            color: #484f58;
-            min-width: 60px;
-        }
-        
-        .console-type {
-            min-width: 50px;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 10px;
-        }
-        
-        .console-type.incoming { color: #3fb950; }
-        .console-type.outgoing { color: #58a6ff; }
-        .console-type.queue { color: #d29922; }
-        .console-type.ended { color: #8b949e; }
-        
-        .console-queue {
-            min-width: 150px;
-            color: #c9d1d9;
-        }
-        
-        .console-agent {
-            min-width: 100px;
-            color: #a371f7;
-        }
-        
-        .console-duration {
-            min-width: 60px;
-            color: #7ee787;
-            text-align: right;
-        }
-        
-        .console-empty {
-            color: #484f58;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .console-stats {
-            display: flex;
-            gap: 15px;
-            padding: 5px 10px;
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            font-size: 10px;
-        }
-        
-        .console-stat {
-            display: flex;
-            gap: 4px;
-        }
-        
-        .console-stat-num {
-            color: #58a6ff;
-            font-weight: 600;
-        }
-        
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal-overlay.active {
-            display: flex;
-        }
-        
-        .modal {
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            width: 500px;
-            max-width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-        }
-        
-        .modal-header {
-            background: #161b22;
-            padding: 12px 15px;
-            border-bottom: 1px solid #30363d;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .modal-title {
-            color: #c9d1d9;
-            font-size: 14px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .modal-close {
-            background: none;
-            border: none;
-            color: #8b949e;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 0;
-            line-height: 1;
-        }
-        
-        .modal-close:hover {
-            color: #c9d1d9;
-        }
-        
-        .modal-body {
-            padding: 15px;
-        }
-        
-        .modal-section {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #30363d;
-        }
-        
-        .modal-section:last-child {
-            margin-bottom: 0;
-            padding-bottom: 0;
-            border-bottom: none;
-        }
-        
-        .modal-section-title {
-            color: #8b949e;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-        
-        .modal-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-        }
-        
-        .modal-label {
-            color: #8b949e;
-            font-size: 12px;
-        }
-        
-        .modal-value {
-            color: #c9d1d9;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        
-        .modal-value.phone {
-            color: #58a6ff;
-        }
-        
-        .modal-value.state {
-            padding: 2px 8px;
-            border-radius: 8px;
-            font-size: 10px;
-        }
-        
-        .modal-value.duration {
-            color: #7ee787;
-        }
-        
-        .modal-avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            font-weight: 600;
-            color: white;
-        }
-        
-        .modal-avatar.supervisor { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .modal-avatar.agent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-        
-        .modal-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 15px;
-        }
-        
-        .modal-btn {
-            flex: 1;
-            padding: 8px 12px;
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #c9d1d9;
-            font-size: 12px;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-        
-        .modal-btn:hover {
-            background: #30363d;
-        }
-        
-        .modal-btn.primary {
-            background: #238636;
-            border-color: #238636;
-        }
-        
-        .modal-btn.primary:hover {
-            background: #2ea043;
-        }
-        
         .users-table {
             width: 100%;
             border-collapse: collapse;
@@ -539,90 +236,6 @@
         .user-phone {
             color: #8b949e;
             font-size: 10px;
-        }
-        
-        .users-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 8px;
-        }
-        
-        .user-card {
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 10px 12px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.2s;
-        }
-        
-        .user-card:hover {
-            border-color: #58a6ff;
-        }
-        
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            color: white;
-            flex-shrink: 0;
-        }
-        
-        .user-avatar.supervisor { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .user-avatar.agent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-        
-        .user-info {
-            flex: 1;
-            min-width: 0;
-        }
-        
-        .user-name {
-            font-size: 13px;
-            font-weight: 600;
-            color: #c9d1d9;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        .user-profile {
-            font-size: 11px;
-            color: #8b949e;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        .user-phone {
-            color: #8b949e;
-            font-size: 10px;
-        }
-        
-        .user-state {
-            font-size: 11px;
-            padding: 2px 6px;
-            border-radius: 8px;
-            white-space: nowrap;
-        }
-        
-        .user-state.supervisor { background: #667eea44; color: #a8a4ff; }
-        .user-state.agent { background: #11998e44; color: #38ef7d; }
-        .user-state.unplugged { background: #ff174444; color: #ff5252; }
-        .user-state.plugged { background: #00c85344; color: #69f0ae; }
-        .user-state.ringing { background: #ff910044; color: #ffab40; }
-        .user-state.busy { background: #ff174444; color: #ff5252; }
-        .user-state.pause { background: #ffab0044; color: #ffab00; }
-        .user-state.outbound { background: #ff174444; color: #ff5252; }
-        
-        .users-table tr:hover td {
-            background: #161b22;
         }
         
         .user-name-cell {
@@ -747,20 +360,29 @@
             gap: 6px;
         }
         
-        .call-card {
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            padding: 8px 10px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        .calls-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
         }
         
-        .call-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .calls-table th {
+            text-align: left;
+            padding: 8px;
+            background: #21262d;
+            border-bottom: 1px solid #30363d;
+            color: #8b949e;
+            font-weight: normal;
+        }
+        
+        .calls-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #21262d;
+            color: #c9d1d9;
+        }
+        
+        .calls-table tr:hover td {
+            background: #161b22;
         }
         
         .call-icon {
@@ -776,21 +398,153 @@
         .call-icon.incoming { background: #23863644; color: #3fb950; }
         .call-icon.outgoing { background: #1f6feb44; color: #58a6ff; }
         
-        .call-numbers {
-            font-size: 11px;
-            color: #c9d1d9;
-        }
-        
-        .call-time {
-            font-size: 10px;
-            color: #8b949e;
-        }
-        
         .empty-state {
             text-align: center;
             padding: 30px;
             color: #8b949e;
             font-size: 12px;
+        }
+        
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        
+        .history-table th {
+            text-align: left;
+            padding: 8px;
+            background: #21262d;
+            border-bottom: 1px solid #30363d;
+            color: #8b949e;
+            font-weight: normal;
+        }
+        
+        .history-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #21262d;
+            color: #c9d1d9;
+        }
+        
+        .history-table tr:hover td {
+            background: #21262d;
+        }
+        
+        .history-icon {
+            font-size: 10px;
+        }
+        
+        .history-icon.incoming { color: #3fb950; }
+        .history-icon.outgoing { color: #58a6ff; }
+        
+        .sessions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-bottom: 15px;
+        }
+        
+        .sessions-table th,
+        .sessions-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .sessions-table th {
+            background: #161b22;
+            font-weight: 600;
+            color: #8b949e;
+            position: sticky;
+            top: 0;
+        }
+        
+        .sessions-table tr:hover td {
+            background: #161b22;
+        }
+        
+        .session-details {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+        
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .session-id {
+            color: #58a6ff;
+            font-weight: 600;
+            font-family: monospace;
+            font-size: 10px;
+        }
+        
+        .session-type {
+            background: #30363d;
+            color: #8b949e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+        
+        .session-type.incoming {
+            background: #23863644;
+            color: #3fb950;
+        }
+        
+        .session-type.outgoing {
+            background: #1f6feb44;
+            color: #58a6ff;
+        }
+        
+        .session-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 10px;
+        }
+        
+        .session-field {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .session-field-label {
+            color: #8b949e;
+        }
+        
+        .session-field-value {
+            color: #c9d1d9;
+            font-family: monospace;
+        }
+        
+        .session-field-value.empty {
+            color: #484f58;
+            font-style: italic;
+        }
+        
+        .btn-session {
+            background: #1f6feb;
+            color: white;
+            border: none;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        
+        .btn-session:hover {
+            background: #1f6febdd;
         }
         
         .footer {
@@ -847,15 +601,13 @@
         <div class="tab" data-tab="calls">
             Appels<span class="tab-badge" id="calls-count">0</span>
         </div>
+        <div class="tab" data-tab="history">
+            Historique<span class="tab-badge" id="history-count">0</span>
+        </div>
     </div>
     
     <div class="content">
         <div id="users-tab" class="tab-content active">
-            <div class="view-toggle">
-                <button class="view-btn active" data-view="table">Table</button>
-                <button class="view-btn" data-view="console">Console</button>
-            </div>
-            <div class="users-grid" id="users-container" style="display: none;"></div>
             <table class="users-table" id="users-table">
                 <thead>
                     <tr>
@@ -871,31 +623,6 @@
                 </thead>
                 <tbody id="users-table-body"></tbody>
             </table>
-            <div class="console-container" id="console-container" style="display: none;">
-                <div class="console-header">
-                    <span class="console-title">Historique des Appels CCXML</span>
-                    <div class="console-controls">
-                        <button class="console-btn" id="console-pause">Pause</button>
-                        <button class="console-btn" id="console-clear">Clear</button>
-                        <button class="console-btn" id="console-refresh">Refresh</button>
-                    </div>
-                </div>
-                <div class="console-stats">
-                    <div class="console-stat">
-                        <span>Total:</span>
-                        <span class="console-stat-num" id="console-total">0</span>
-                    </div>
-                    <div class="console-stat">
-                        <span>Agent:</span>
-                        <span class="console-stat-num" id="console-agent">0</span>
-                    </div>
-                    <div class="console-stat">
-                        <span>Queue:</span>
-                        <span class="console-stat-num" id="console-queue">0</span>
-                    </div>
-                </div>
-                <div class="console-output" id="console-output"></div>
-            </div>
         </div>
         
         <div id="queues-tab" class="tab-content">
@@ -913,84 +640,57 @@
         </div>
         
         <div id="calls-tab" class="tab-content">
+            <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <button onclick="loadLiveCalls()" style="background: #1f6feb; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">🔄 Rafraîchir Appels</button>
+                    <span id="calls-status" style="margin-left: 10px; font-size: 11px; color: #8b949e;"></span>
+                </div>
+                <div id="calls-loading" style="color: #58a6ff; font-size: 11px; display: none;">Chargement...</div>
+            </div>
             <div id="calls-container" class="calls-list"></div>
+        </div>
+        
+        <div id="history-tab" class="tab-content">
+            <!-- Contrôles pour les sessions -->
+            <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <button onclick="loadSessions()" style="background: #238636; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">🔄 Charger Sessions</button>
+                    <span class="filter-label" style="margin-left: 15px;">Session ID:</span>
+                    <input type="text" id="session-id-input" class="search-input" placeholder="ex: 70992" style="width: 100px; margin-left: 5px;">
+                    <button onclick="loadSessionDetails()" style="background: #1f6feb; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-left: 5px;">🔍 Détails</button>
+                </div>
+                <div id="sessions-loading" style="color: #58a6ff; font-size: 11px; display: none;">Chargement...</div>
+            </div>
+            
+            <!-- Historique des appels -->
+            <div style="margin-bottom: 15px;">
+                <h4 style="color: #8b949e; font-size: 12px; margin-bottom: 8px;">Historique des appels</h4>
+                <table class="history-table" id="history-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Appelant</th>
+                            <th>Agent</th>
+                            <th>File</th>
+                            <th>Début</th>
+                            <th>Fin</th>
+                            <th>Durée</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-container"></tbody>
+                </table>
+            </div>
+            
+            <!-- Sessions détaillées -->
+            <div>
+                <h4 style="color: #8b949e; font-size: 12px; margin-bottom: 8px;">Sessions détaillées</h4>
+                <div id="sessions-container"></div>
+            </div>
         </div>
     </div>
     
     <div class="footer">
         Dernière mise à jour: <span id="last-update">--</span>
-    </div>
-    
-    <!-- User Detail Modal -->
-    <div class="modal-overlay" id="user-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <div class="modal-avatar" id="modal-avatar">--</div>
-                    <span id="modal-username">Utilisateur</span>
-                </div>
-                <button class="modal-close" id="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="modal-section">
-                    <div class="modal-section-title">Informations générales</div>
-                    <div class="modal-row">
-                        <span class="modal-label">Type</span>
-                        <span class="modal-value" id="modal-type">-</span>
-                    </div>
-                    <div class="modal-row">
-                        <span class="modal-label">Téléphone</span>
-                        <span class="modal-value phone" id="modal-phone">-</span>
-                    </div>
-                    <div class="modal-row">
-                        <span class="modal-label">Login</span>
-                        <span class="modal-value" id="modal-login">-</span>
-                    </div>
-                    <div class="modal-row">
-                        <span class="modal-label">Profile</span>
-                        <span class="modal-value" id="modal-profile">-</span>
-                    </div>
-                </div>
-                
-                <div class="modal-section">
-                    <div class="modal-section-title">État actuel</div>
-                    <div class="modal-row">
-                        <span class="modal-label">État</span>
-                        <span class="modal-value state" id="modal-state">-</span>
-                    </div>
-                    <div class="modal-row">
-                        <span class="modal-label">Tâche</span>
-                        <span class="modal-value" id="modal-task">-</span>
-                    </div>
-                    <div class="modal-row">
-                        <span class="modal-label">Mode</span>
-                        <span class="modal-value" id="modal-mode">-</span>
-                    </div>
-                </div>
-                
-                <div class="modal-section">
-                    <div class="modal-section-title">Session</div>
-                    <div class="modal-row">
-                        <span class="modal-label">Session ID</span>
-                        <span class="modal-value" id="modal-session" style="font-family: monospace; font-size: 10px;">-</span>
-                    </div>
-                    <div class="modal-row">
-                        <span class="modal-label">Connexion</span>
-                        <span class="modal-value duration" id="modal-duration">-</span>
-                    </div>
-                    <div class="modal-row">
-                        <span class="modal-label">Heure de connexion</span>
-                        <span class="modal-value" id="modal-login-time">-</span>
-                    </div>
-                </div>
-                
-                <div class="modal-actions">
-                    <button class="modal-btn primary" id="modal-message">Envoyer message</button>
-                    <button class="modal-btn" id="modal-hangup">Raccrocher</button>
-                    <button class="modal-btn" id="modal-pause">Mettre en pause</button>
-                </div>
-            </div>
-        </div>
     </div>
     
     <script>
@@ -1005,63 +705,19 @@
             });
         });
         
-        // Add search and filter event listeners
         document.getElementById('search-input').addEventListener('input', fetchData);
         document.getElementById('state-filter').addEventListener('change', fetchData);
         document.getElementById('type-filter').addEventListener('change', fetchData);
-        
-        // View toggle functionality
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                
-                const view = btn.dataset.view;
-                document.getElementById('users-container').style.display = 'none';
-                document.getElementById('users-table').style.display = 'none';
-                document.getElementById('console-container').style.display = 'none';
-                
-                if (view === 'table') {
-                    document.getElementById('users-table').style.display = 'table';
-                } else if (view === 'grid') {
-                    document.getElementById('users-container').style.display = 'grid';
-                } else if (view === 'console') {
-                    document.getElementById('console-container').style.display = 'block';
-                }
-                
-                fetchData(); // Refresh data with new view
-            });
-        });
-        
-        // Initialize console
-        initConsole();
-        initModal();
-        
-        // View toggle functionality
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                
-                const view = btn.dataset.view;
-                document.getElementById('users-table').style.display = 'none';
-                document.getElementById('console-container').style.display = 'none';
-                
-                if (view === 'table') {
-                    document.getElementById('users-table').style.display = 'table';
-                } else if (view === 'console') {
-                    document.getElementById('console-container').style.display = 'block';
-                }
-                
-                fetchData(); // Refresh data with new view
-            });
-        });
         
         function fetchData() {
             fetch('/api/all')
                 .then(r => r.json())
                 .then(updateDashboard)
-                .catch(e => console.error('Erreur:', e));
+                .catch(e => {
+                    console.error('Erreur:', e);
+                    // Load calls from our working API
+                    loadLiveCalls();
+                });
         }
         
         function updateDashboard(data) {
@@ -1069,17 +725,26 @@
             badge.className = 'status-badge ' + (data.connected ? 'status-connected' : 'status-disconnected');
             badge.textContent = data.connected ? 'Connecté' : 'Déconnecté';
             
+            // Use REAL CCCP data
+            const users = data.users || [];
+            const queues = data.queues || [];
+            const realSessionCount = data.real_sessions ? data.real_sessions.length : 0;
+            
             document.getElementById('stat-total').textContent = data.stats?.total_users || 0;
             document.getElementById('stat-supervisors').textContent = data.stats?.supervisors || 0;
             document.getElementById('stat-agents').textContent = data.stats?.agents || 0;
             document.getElementById('stat-logged').textContent = data.stats?.logged_in || 0;
-            document.getElementById('users-count').textContent = data.users?.length || 0;
-            document.getElementById('queues-count').textContent = data.queues?.length || 0;
-            document.getElementById('calls-count').textContent = data.call_history?.length || 0;
+            document.getElementById('users-count').textContent = users.length;
+            document.getElementById('queues-count').textContent = queues.length;
+            document.getElementById('calls-count').textContent = realSessionCount;
+            document.getElementById('history-count').textContent = data.calls?.history?.length || 0;
             
-            updateUsers(data.users || []);
-            updateQueues(data.queues || []);
-            updateCalls(data.call_history || []);
+            // Update with REAL user data from CCCP
+            updateUsers(users);
+            updateQueues(queues);
+            
+            updateCalls(data.calls || {incoming: [], outgoing: [], active: 0, history: []});
+            updateHistory(data.calls?.history || []);
             
             if (data.last_update) {
                 document.getElementById('last-update').textContent = new Date(data.last_update).toLocaleString('fr-FR');
@@ -1104,7 +769,7 @@
                     (user.state && user.state.toLowerCase().includes(stateFilter));
                 
                 // Type filter
-                const matchesType = !typeFilter || 
+                const matchesType = !typeFilter ||
                     (user.type && user.type.toLowerCase().includes(typeFilter));
                 
                 return matchesSearch && matchesState && matchesType;
@@ -1119,16 +784,13 @@
                 return;
             }
 
-            // Update table view
             document.getElementById('users-table-body').innerHTML = filteredUsers.map(user => {
                 const typeClass = user.type || 'agent';
                 const stateClass = getStateClass(user.state || '');
                 const initials = (user.name || 'U').substring(0, 2).toUpperCase();
                 
-                const userJson = JSON.stringify(user).replace(/"/g, '&quot;');
-                
                 return `
-                    <tr onclick="openModal(${userJson})" style="cursor: pointer;">
+                    <tr>
                         <td>
                             <div class="table-name-cell">
                                 <div class="user-avatar ${typeClass}" style="width: 20px; height: 20px; font-size: 8px;">${initials}</div>
@@ -1169,230 +831,82 @@
         
         function updateCalls(calls) {
             const container = document.getElementById('calls-container');
+            const incoming = calls.incoming || [];
+            const outgoing = calls.outgoing || [];
             
-            if (!calls || calls.length === 0) {
-                container.innerHTML = '<div class="empty-state">Aucun appel dans l\'historique</div>';
+            // Combiner tous les appels
+            const allCalls = [
+                ...incoming.map(c => ({...c, source: 'inbound'})),
+                ...outgoing.map(c => ({...c, source: 'outbound'}))
+            ];
+            
+            if (allCalls.length === 0) {
+                container.innerHTML = '<div class="empty-state">Aucun appel en cours</div>';
                 return;
             }
             
-            container.innerHTML = calls.map(call => {
-                const queueType = call.queue_type || 'unknown';
-                const typeClass = queueType === 'user' ? 'incoming' : (queueType === 'outbound' ? 'outgoing' : 'state');
-                const typeIcon = queueType === 'user' ? '📞' : (queueType === 'outbound' ? '📤' : '📋');
-                
-                const dateStr = call.start_date || '';
-                const timeStr = call.start_time || '--:--:--';
-                const queueName = call.queue_display_name || 'N/A';
-                const totalDuration = call.total_duration || '-';
-                const waitingDuration = call.waiting_duration || '-';
-                const managingDuration = call.managing_duration || '-';
-                const postMgmtDuration = call.post_management_duration || '-';
-                const agent = call.manager_login || '-';
-                const caller = call.caller || '-';
-                const callee = call.callee || '-';
-                
-                return `
-                    <div class="call-card" style="flex-direction: column; gap: 8px; padding: 12px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div class="call-icon ${typeClass}" style="width: 28px; height: 28px; font-size: 12px;">${typeIcon}</div>
-                                <div>
-                                    <div class="call-numbers" style="font-weight: 600;">${queueName}</div>
-                                    <div style="font-size: 10px; color: #8b949e;">Agent: ${agent}</div>
-                                </div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div class="call-time">${dateStr} ${timeStr}</div>
-                                <div style="font-size: 10px; color: #7ee787;">Total: ${totalDuration}</div>
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 15px; font-size: 10px; color: #8b949e;">
-                            <div><span style="color: #58a6ff;">Caller:</span> ${caller}</div>
-                            <div><span style="color: #d29922;">Callee:</span> ${callee}</div>
-                        </div>
-                        <div style="display: flex; gap: 10px; font-size: 10px;">
-                            <div style="background: #21262d; padding: 4px 8px; border-radius: 4px;">
-                                <span style="color: #f85149;">Attente:</span> <span style="color: #c9d1d9;">${waitingDuration}</span>
-                            </div>
-                            <div style="background: #21262d; padding: 4px 8px; border-radius: 4px;">
-                                <span style="color: #7ee787;">Conversation:</span> <span style="color: #c9d1d9;">${managingDuration}</span>
-                            </div>
-                            ${postMgmtDuration !== '0s' ? `
-                            <div style="background: #21262d; padding: 4px 8px; border-radius: 4px;">
-                                <span style="color: #a371f7;">Post-traitement:</span> <span style="color: #c9d1d9;">${postMgmtDuration}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-        
-        // Console functionality for Call History
-        let consolePaused = false;
-        let callHistory = [];
-        const MAX_CONSOLE_LINES = 100;
-        
-        function initConsole() {
-            document.getElementById('console-pause').addEventListener('click', function() {
-                consolePaused = !consolePaused;
-                this.textContent = consolePaused ? 'Reprendre' : 'Pause';
-                this.style.color = consolePaused ? '#f85149' : '#8b949e';
-            });
-            
-            document.getElementById('console-clear').addEventListener('click', function() {
-                callHistory = [];
-                document.getElementById('console-output').innerHTML = '';
-                updateConsoleStats();
-            });
-            
-            document.getElementById('console-refresh').addEventListener('click', function() {
-                fetchData();
-            });
-        }
-        
-        function formatTime(dateStr) {
-            if (!dateStr || dateStr === 'None') return '--:--:--';
-            try {
-                const date = new Date(dateStr);
-                return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            } catch (e) {
-                return '--:--:--';
-            }
-        }
-        
-        function formatDate(dateStr) {
-            if (!dateStr || dateStr === 'None') return '';
-            try {
-                const date = new Date(dateStr);
-                return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
-            } catch (e) {
-                return '';
-            }
-        }
-        
-        function updateConsole(callHistoryData) {
-            if (!callHistoryData || callHistoryData.length === 0) {
-                document.getElementById('console-output').innerHTML = '<div class="console-empty">Aucun appel dans l\'historique</div>';
-                updateConsoleStats();
-                return;
-            }
-            
-            // Update call history
-            callHistory = callHistoryData;
-            
-            if (consolePaused) return;
-            
-            const container = document.getElementById('console-output');
-            const isScrolledToBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
-            
-            // Render call history
-            container.innerHTML = callHistory.map(call => formatCallLine(call)).join('');
-            
-            // Auto-scroll to bottom if was already at bottom
-            if (isScrolledToBottom) {
-                container.scrollTop = container.scrollHeight;
-            }
-            
-            updateConsoleStats();
-        }
-        
-        function updateConsoleStats() {
-            if (!callHistory || callHistory.length === 0) {
-                document.getElementById('console-total').textContent = '0';
-                document.getElementById('console-agent').textContent = '0';
-                document.getElementById('console-queue').textContent = '0';
-                return;
-            }
-            
-            const agentCalls = callHistory.filter(c => c.queue_type === 'user').length;
-            const queueCalls = callHistory.filter(c => c.queue_type === 'queue').length;
-            
-            document.getElementById('console-total').textContent = callHistory.length;
-            document.getElementById('console-agent').textContent = agentCalls;
-            document.getElementById('console-queue').textContent = queueCalls;
-        }
-        
-        function formatCallLine(call) {
-            const startDate = formatDate(call.start_date);
-            const startTime = formatTime(call.start_date);
-            const queueType = call.queue_type || 'unknown';
-            const queueName = call.queue_display_name || 'N/A';
-            const duration = call.duration || '-';
-            const agent = call.manager_login || '-';
-            
-            let typeClass = 'ended';
-            let typeLabel = queueType === 'user' ? 'AGENT' : 'QUEUE';
-            
-            return `
-                <div class="console-line">
-                    <span class="console-time">${startDate} ${startTime}</span>
-                    <span class="console-type ${typeClass}">${typeLabel}</span>
-                    <span class="console-queue">${queueName}</span>
-                    <span class="console-agent">${agent}</span>
-                    <span class="console-duration">${duration}</span>
-                </div>
+            container.innerHTML = `
+                <table class="calls-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Appelant</th>
+                            <th>Agent</th>
+                            <th>File</th>
+                            <th>Début</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${allCalls.map(call => {
+                            const iconClass = call.source === 'inbound' ? 'incoming' : 'outgoing';
+                            const icon = call.source === 'inbound' ? '📥' : '📤';
+                            const time = call.start_date || call.create_date || '';
+                            const formattedTime = time ? time.split(' ')[1] || time : '--:--';
+                            
+                            return `
+                                <tr>
+                                    <td><span class="call-icon ${iconClass}">${icon}</span></td>
+                                    <td>${call.remote_number || '-'}</td>
+                                    <td>${call.user_login || '-'}</td>
+                                    <td>${call.queue_name || '-'}</td>
+                                    <td>${formattedTime}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
             `;
         }
         
-        // Modal functionality
-        let currentUser = null;
-        
-        function openModal(user) {
-            try {
-                if (typeof user === 'string') {
-                    user = JSON.parse(user);
-                }
-            } catch (e) {
-                console.error('Error parsing user:', e);
+        function updateHistory(history) {
+            const container = document.getElementById('history-container');
+            
+            if (!history || history.length === 0) {
+                container.innerHTML = '<tr><td colspan="7" class="empty-state">Aucun historique d\'appel</td></tr>';
                 return;
             }
             
-            currentUser = user;
-            const initials = (user.name || 'U').substring(0, 2).toUpperCase();
-            const typeClass = user.type || 'agent';
-            
-            document.getElementById('modal-avatar').className = `modal-avatar ${typeClass}`;
-            document.getElementById('modal-avatar').textContent = initials;
-            document.getElementById('modal-username').textContent = user.name || 'N/A';
-            document.getElementById('modal-type').textContent = user.type || 'agent';
-            document.getElementById('modal-phone').textContent = user.phone || '-';
-            document.getElementById('modal-login').textContent = user.login || '-';
-            document.getElementById('modal-profile').textContent = user.profile || '-';
-            
-            const stateClass = getStateClass(user.state || '');
-            const stateText = formatState(user.state || 'N/A');
-            document.getElementById('modal-state').className = `modal-value state ${stateClass}`;
-            document.getElementById('modal-state').textContent = stateText;
-            document.getElementById('modal-task').textContent = user.last_task_display_name || '-';
-            document.getElementById('modal-mode').textContent = user.mode || '-';
-            
-            document.getElementById('modal-session').textContent = user.session_id || '-';
-            document.getElementById('modal-duration').textContent = user.login_duration_formatted || '-';
-            document.getElementById('modal-login-time').textContent = user.login_time || '-';
-            
-            document.getElementById('user-modal').classList.add('active');
-        }
-        
-        window.openModal = openModal;
-        window.closeModal = closeModal;
-        
-        function closeModal() {
-            document.getElementById('user-modal').classList.remove('active');
-            currentUser = null;
-        }
-        
-        function initModal() {
-            document.getElementById('modal-close').addEventListener('click', closeModal);
-            document.getElementById('user-modal').addEventListener('click', (e) => {
-                if (e.target === document.getElementById('user-modal')) {
-                    closeModal();
-                }
-            });
-            
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') closeModal();
-            });
+            container.innerHTML = history.map(call => {
+                const iconClass = call.type === 'outbound' ? 'outgoing' : 'incoming';
+                const icon = call.type === 'outbound' ? '📤' : '📥';
+                
+                const startDate = call.create_date || '';
+                const endDate = call.terminate_date || '';
+                const startTime = startDate ? startDate.split(' ')[1] || startDate : '--:--';
+                const endTime = endDate ? endDate.split(' ')[1] || endDate : '--:--';
+                
+                return `
+                    <tr>
+                        <td><span class="history-icon ${iconClass}">${icon}</span></td>
+                        <td>${call.remote_number || '-'}</td>
+                        <td>${call.user_login || '-'}</td>
+                        <td>${call.queue_name || '-'}</td>
+                        <td>${startTime}</td>
+                        <td>${endTime}</td>
+                        <td>${call.duration || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
         }
         
         function getStateClass(state) {
@@ -1429,8 +943,337 @@
             return dateStr;
         }
         
+        // Variables globales pour les sessions
+        let availableSessions = [];
+        let sessionDetails = new Map();
+        
+        // Fonctions pour les sessions
+        async function loadSessions() {
+            const loading = document.getElementById('sessions-loading');
+            const container = document.getElementById('sessions-container');
+            
+            loading.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/sessions/search');
+                const data = await response.json();
+                
+                if (data.sessions) {
+                    availableSessions = data.sessions;
+                    displaySessionsList();
+                } else {
+                    container.innerHTML = '<div class="empty-state">Erreur: ' + (data.error || 'Impossible de charger les sessions') + '</div>';
+                }
+            } catch (error) {
+                container.innerHTML = '<div class="empty-state">Erreur de connexion: ' + error.message + '</div>';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        function displaySessionsList() {
+            const container = document.getElementById('sessions-container');
+            
+            if (availableSessions.length === 0) {
+                container.innerHTML = '<div class="empty-state">Aucune session trouvée</div>';
+                return;
+            }
+            
+            let html = '<table class="sessions-table"><thead><tr><th>ID</th><th>Session</th><th>Actions</th></tr></thead><tbody>';
+            
+            availableSessions.forEach(sessionId => {
+                html += `
+                    <tr>
+                        <td>${sessionId}</td>
+                        <td class="table-session">session_${sessionId}@...</td>
+                        <td>
+                            <button class="btn-session" onclick="loadSessionDetails(${sessionId})">Détails</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            html += '<div style="margin-top: 10px; font-size: 10px; color: #8b949e;">Cliquez sur "Détails" pour voir les informations complètes de la session</div>';
+            
+            container.innerHTML = html;
+        }
+        
+        async function loadSessionDetails(sessionId = null) {
+            const targetId = sessionId || document.getElementById('session-id-input').value;
+            
+            if (!targetId) {
+                alert('Veuillez entrer un ID de session');
+                return;
+            }
+            
+            const loading = document.getElementById('sessions-loading');
+            loading.style.display = 'block';
+            
+            try {
+                const response = await fetch(`/api/session/${targetId}`);
+                
+                if (response.ok) {
+                    const details = await response.json();
+                    sessionDetails.set(targetId, details);
+                    displaySessionDetails(targetId, details);
+                } else {
+                    const error = await response.json();
+                    displayError(targetId, error.error || 'Session non trouvée');
+                }
+            } catch (error) {
+                displayError(targetId, 'Erreur de connexion: ' + error.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        function displaySessionDetails(sessionId, details) {
+            const container = document.getElementById('sessions-container');
+            
+            const createDate = details.create_date ? formatDate(details.create_date) : 'N/A';
+            const terminateDate = details.terminate_date ? formatDate(details.terminate_date) : 'N/A';
+            const duration = calculateDuration(details.create_date, details.terminate_date);
+            
+            // Formater le type de session
+            const sessionTypeText = formatSessionType(details.session_type);
+            const sessionTypeClass = getSessionTypeClass(details.session_type);
+            
+            const html = `
+                <div class="session-details">
+                    <div class="session-header">
+                        <div>
+                            <span class="session-id">${details.session_id || `session_${sessionId}@...`}</span>
+                            <span class="session-type ${sessionTypeClass}">${sessionTypeText}</span>
+                        </div>
+                        <button class="btn-session" onclick="removeSessionDetails('${sessionId}')">×</button>
+                    </div>
+                    <div class="session-info">
+                        <div class="session-field">
+                            <span class="session-field-label">Création:</span>
+                            <span class="session-field-value">${createDate}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Fin:</span>
+                            <span class="session-field-value">${terminateDate}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Durée:</span>
+                            <span class="session-field-value">${duration}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Utilisateur:</span>
+                            <span class="session-field-value ${!details['user.login'] ? 'empty' : ''}">${details['user.login'] || 'Non assigné'}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Nom utilisateur:</span>
+                            <span class="session-field-value ${!details['user.name'] ? 'empty' : ''}">${details['user.name'] || 'Non assigné'}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">File d'attente:</span>
+                            <span class="session-field-value ${!details.queue_name ? 'empty' : ''}">${details.queue_name || 'Non assignée'}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Numéro local:</span>
+                            <span class="session-field-value ${!details['attributes.local_number.value'] ? 'empty' : ''}">${details['attributes.local_number.value'] || 'N/A'}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Numéro distant:</span>
+                            <span class="session-field-value ${!details['attributes.remote_number.value'] ? 'empty' : ''}">${details['attributes.remote_number.value'] || 'N/A'}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Enregistrement:</span>
+                            <span class="session-field-value ${!details['record_active.value'] ? 'empty' : ''}">${details['record_active.value'] || 'Inactif'}</span>
+                        </div>
+                        <div class="session-field">
+                            <span class="session-field-label">Gestionnaire:</span>
+                            <span class="session-field-value ${!details['manager_session.user.login'] ? 'empty' : ''}">${details['manager_session.user.login'] || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Ajouter au début du conteneur
+            if (container.innerHTML.includes('sessions-table')) {
+                container.innerHTML = html + container.innerHTML;
+            } else {
+                container.innerHTML = html + container.innerHTML;
+            }
+        }
+        
+        function displayError(sessionId, errorMessage) {
+            const container = document.getElementById('sessions-container');
+            
+            const html = `
+                <div class="session-details" style="border-color: #da3633;">
+                    <div class="session-header">
+                        <div>
+                            <span class="session-id" style="color: #ff5252;">Session ${sessionId}</span>
+                        </div>
+                        <button class="btn-session" onclick="removeSessionDetails('${sessionId}')">×</button>
+                    </div>
+                    <div style="color: #ff5252; font-size: 10px;">${errorMessage}</div>
+                </div>
+            `;
+            
+            container.innerHTML = html + container.innerHTML;
+        }
+        
+        function removeSessionDetails(sessionId) {
+            sessionDetails.delete(sessionId);
+            // Réafficher la liste
+            if (sessionDetails.size === 0) {
+                displaySessionsList();
+            } else {
+                // Recharger la vue actuelle
+                const currentHTML = document.getElementById('sessions-container').innerHTML;
+                // Simple solution: recharger la liste
+                displaySessionsList();
+                // Réafficher les autres détails
+                sessionDetails.forEach((details, id) => {
+                    if (id !== sessionId) {
+                        displaySessionDetails(id, details);
+                    }
+                });
+            }
+        }
+        
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleString('fr-FR');
+            } catch (e) {
+                return dateStr;
+            }
+        }
+        
+        function formatSessionType(sessionType) {
+            switch(sessionType) {
+                case 1: return 'incoming';
+                case 3: return 'outgoing';
+                default: return `Type ${sessionType || 'N/A'}`;
+            }
+        }
+        
+        function getSessionTypeClass(sessionType) {
+            switch(sessionType) {
+                case 1: return 'incoming';
+                case 3: return 'outgoing';
+                default: return '';
+            }
+        }
+        
+        function calculateDuration(startDate, endDate) {
+            if (!startDate) return 'N/A';
+            try {
+                const start = new Date(startDate);
+                const end = endDate ? new Date(endDate) : new Date();
+                const diff = end - start;
+                
+                if (diff < 0) return 'N/A';
+                
+                const seconds = Math.floor(diff / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                
+                if (hours > 0) {
+                    return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+                } else if (minutes > 0) {
+                    return `${minutes}m ${seconds % 60}s`;
+                } else {
+                    return `${seconds}s`;
+                }
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+        
+        // Fonction pour charger les appels en direct
+        async function loadLiveCalls() {
+            const loading = document.getElementById('calls-loading');
+            const status = document.getElementById('calls-status');
+            
+            loading.style.display = 'block';
+            status.textContent = '';
+            
+            try {
+                const response = await fetch('/calls');
+                const calls = await response.json();
+                
+                if (response.ok) {
+                    updateCallsFromRealData(calls);
+                    status.textContent = `${calls.length} appels actifs - ${new Date().toLocaleTimeString('fr-FR')}`;
+                    status.style.color = '#3fb950';
+                    
+                    // Update calls count
+                    document.getElementById('calls-count').textContent = calls.length;
+                    
+                    // Update status to connected if we have real calls
+                    const badge = document.getElementById('status-badge');
+                    badge.className = 'status-badge status-connected';
+                    badge.textContent = 'Connecté';
+                } else {
+                    status.textContent = 'Erreur lors du chargement';
+                    status.style.color = '#ff5252';
+                }
+            } catch (error) {
+                status.textContent = `Erreur: ${error.message}`;
+                status.style.color = '#ff5252';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        function updateCallsFromRealData(calls) {
+            const container = document.getElementById('calls-container');
+            
+            if (!calls || calls.length === 0) {
+                container.innerHTML = '<div class="empty-state">Aucun appel en cours</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <table class="calls-table">
+                    <thead>
+                        <tr>
+                            <th>Session ID</th>
+                            <th>Appelant</th>
+                            <th>Appelé</th>
+                            <th>Statut</th>
+                            <th>Début</th>
+                            <th>Durée</th>
+                            <th>Direction</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${calls.map(call => {
+                            const direction = call.direction || 'inbound';
+                            const icon = direction === 'inbound' ? '📥' : '📤';
+                            const iconClass = direction === 'inbound' ? 'incoming' : 'outgoing';
+                            
+                            return `
+                                <tr onclick="loadSessionDetails('${call.session_id}')" style="cursor: pointer;">
+                                    <td><span class="call-icon ${iconClass}">${icon}</span> ${call.session_id}</td>
+                                    <td>${call.caller || 'Unknown'}</td>
+                                    <td>${call.callee || 'Unknown'}</td>
+                                    <td><span class="table-state busy">${call.status || 'Active'}</span></td>
+                                    <td>${call.start_time || 'N/A'}</td>
+                                    <td class="table-duration">${call.duration || '0:00'}</td>
+                                    <td><span class="user-badge state">${direction}</span></td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
         setInterval(fetchData, POLL_INTERVAL);
         fetchData();
+        
+        // Auto-rafraîchir les appels toutes les 10 secondes  
+        setInterval(loadLiveCalls, 10000);
     </script>
 </body>
 </html>

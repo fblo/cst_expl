@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+DIAG_TEMP=/src/tmp
+
+USAGE='Usage: plog-users 
+	Donne la liste des sessions utilisateurs dans les logs binaires de $DIAG_TEMP.
+	Part du principe que les logs binaires dans $DIAG_TEMP ont été copiés avec plog-get.
+'
+a=$(basename $(ls -1 $DIAG_TEMP/log_* | head -n 1))
+if [[ "$a" == "" ]];then
+	echo "ERREUR : pas de fichier de log cst dans $DIAG_TEMP trouvé."
+	exit 1
+fi
+jour=${a:4:10}
+ivlog-users $DIAG_TEMP $jour | sort -k 2 

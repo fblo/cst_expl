@@ -1,0 +1,136 @@
+#!/bin/bash
+
+base_user="connectics"
+db_user="interactiv"
+db_name="iveventsdb"
+
+show_help() {
+	cat <<- EOF
+		Usage: ${0##*/} [-h][-c] MIDDELWARE_HOST MAIL_HOST API_HOST
+
+		Restart all mcanal modules.
+
+		Positional arguments:
+		    MIDDELWARE_HOST   target iv-middleware-server host name.
+		    MAIL_HOST         target iv-mail-server host name.
+		    API_HOST          target iv-api-server host name.
+
+		Options:
+		    -h        display this help message and exit.
+		    -c        clean unfinished sessions in iveventsdb.
+	EOF
+}
+
+die() {
+	>&2 echo "$1"
+	exit 2
+}
+
+get_check_errors_command() {
+	cmd="echo 'Sleeping 2 seconds before checking for errors' && sleep 2 && tail -100 $1 | grep ' ERROR '"
+}
+
+check_result() {
+	if [ $? -ne $2 ]; then
+		echo "Errors have been found during $1 start."
+		echo -n "Continue ? [y] " && read answer
+		if [ "$answer" != "" ] && [ "$answer" != "y" ] && [ "$answer" != "yes" ]; then
+			die "Exiting."
+		fi
+	fi
+}
+
+get_clean_sessions_command() {
+	cmd="echo 'Connecting to database $db_name with user $db_user'"
+	cmd="$cmd && mysql -u $db_user -p $db_name -e "
+	# Force end for MiddlewareSessions
+	cmd="$cmd 'UPDATE MiddlewareSessions"
+	cmd="$cmd SET MiddlewareSessions.end = ((UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(MiddlewareSessions.start / 1000000))) + 86400) * 1000000)"
+	cmd="$cmd WHERE MiddlewareSessions.end IS NULL AND MiddlewareSessions.start IS NOT NULL;"
+	# Force end for MailSessions
+	cmd="$cmd UPDATE MailSessions"
+	cmd="$cmd SET MailSessions.end = ((UNIX_TIMESTAMP(DATE(FROM_UNIXTIME(MailSessions.start / 1000000))) + 86400) * 1000000)"
+	cmd="$cmd WHERE MailSessions.end IS NULL AND MailSessions.start IS NOT NULL;"
+	# Update end for global Sessions
+	cmd="$cmd UPDATE Sessions AS S"
+	cmd="$cmd LEFT OUTER JOIN MailSessions AS MAS ON MAS.session_ref = S.id"
+	cmd="$cmd LEFT OUTER JOIN MiddlewareSessions AS MIS on MIS.session_ref = S.id"
+	cmd="$cmd SET S.end = IF(MAS.end > MIS.end, MAS.end, MIS.end)"
+	cmd="$cmd WHERE S.start IS NOT NULL and S.end IS NULL;'"
+}
+
+remote_command() {
+	echo "Connecting '$base_user' user to $1"
+	ssh "$base_user@$1" -t "$2"
+}
+
+remote_root_command() {
+	remote_command "$1" "$(cat <<- EOF
+		echo "Switching to root user."
+		su - -c "$(cat <<- EOC
+			$2
+		EOC
+		)"
+	EOF
+	)"
+}
+
+remote_restart() {
+	[ $# -gt 2 ] && before="$3 && " || before=""
+	get_check_errors_command "/var/log/interact-iv/$2.log"
+	remote_root_command "$1" "${before}service $2 restart && $cmd"
+	check_result "$2" 1
+}
+
+remote_start() {
+	[ $# -gt 2 ] && before="$3 && " || before=""
+	get_check_errors_command "/var/log/interact-iv/$2.log"
+	remote_root_command "$1" "${before}service $2 start && $cmd"
+	check_result "$2" 1
+}
+
+remote_stop() {
+	[ $# -gt 2 ] && before="$3 && " || before=""
+	remote_root_command "$1" "${before}service $2 stop"
+}
+
+if [[ $0 =~ iv-restart-modules ]]; then
+	clean_sessions=false
+
+	while getopts "hc" opt; do
+		case "$opt" in
+			h)
+				show_help
+				exit 0
+				;;
+
+			c)
+				clean_sessions=true
+				;;
+
+			'?')
+				show_help >&2
+				exit 1
+				;;
+		esac
+	done
+
+	middleware_host="${@:$OPTIND:1}"
+	mail_host="${@:$OPTIND+1:1}"
+	api_host="${@:$OPTIND+2:1}"
+
+	[[ "$middleware_host" == "" ]] && die "The MIDDELWARE_HOST argument is required."
+	[[ "$mail_host" == "" ]] && die "The MAIL_HOST argument is required."
+	[[ "$api_host" == "" ]] && die "The API_HOST argument is required."
+
+	remote_stop "$middleware_host" "iv-middleware-server"
+	remote_stop "$mail_host" "iv-mail-server"
+	if $clean_sessions; then
+		get_clean_sessions_command
+		remote_restart "$api_host" "iv-api-server" "$cmd"
+	else
+		remote_restart "$api_host" "iv-api-server"
+	fi
+	remote_start "$mail_host" "iv-mail-server"
+	remote_start "$middleware_host" "iv-middleware-server"
+fi

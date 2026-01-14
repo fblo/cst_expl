@@ -1,0 +1,431 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# This file is part of Interact-IV's IV2US Tools.
+# Interact-IV.com (c) 2015
+#
+# Contact: softeam@interact-iv.com
+# Authors:
+#    - JTAG <jtag@interact-iv.com>
+
+
+import argparse
+import ConfigParser
+import getpass
+import sys
+
+from dateutil import parser
+from twisted.internet import defer, reactor
+from twisted.python import log
+from twisted.python.failure import NoCurrentExceptionError
+
+from apiserver.ConnectionPool import ReconnectingConnectionPool
+from apiserver.backends.exceptions import DatabaseException
+from apiserver.modules.eventsapi.v1.rest.transactions import (
+    create_dynamic_resource_transaction,
+    get_channel_session_ref,
+    get_profile_ref,
+    get_project_ref,
+    get_queue_ref,
+    get_user_ref,
+    get_vocal_queue_ref,
+    update_communication,
+    update_resource_transaction,
+)
+from apiserver.time import (
+    utc_microseconds,
+)
+from ivcommons.apiclients import RecordsAPIClient
+
+
+DEFAULT_SQL_USER = 'interactiv'
+DEFAULT_PORTAL_DB = 'interactivportal'
+UPGRADE_DATE = parser.parse("2015-11-20")
+
+
+def die(msg):
+    log.msg(msg)
+    sys.exit(1)
+
+
+def handle_error(failure):
+    try:
+        log.err()
+    except NoCurrentExceptionError:
+        log.msg(failure)
+    reactor.stop()
+
+
+class Client(object):
+    def __init__(self, args):
+        self.ready_deferred = defer.Deferred()
+        self.ready_deferred.addCallbacks(self._log_test_success, handle_error)
+
+        self._parse_credentials(args)
+        self._initialise_client()
+        self._test()
+
+    def _parse_credentials(self, args):
+        raise NotImplementedError()
+
+    def _initialise_client(self):
+        raise NotImplementedError()
+
+    def _test(self):
+        log.msg("Testing DB connectivity.")
+        deferreds = [
+            self.db.runQuery('select 1'),
+        ]
+
+        d = defer.gatherResults(deferreds)
+        d.chainDeferred(self.ready_deferred)
+
+    def _test_success_msg(self):
+        return "Connectivity test to DBs succeeded!"
+
+    def _log_test_success(self, _):
+        log.msg(self._test_success_msg())
+
+
+class APIClient(Client):
+    def _parse_credentials(self, _):
+        self._cfg = ConfigParser.SafeConfigParser()
+        self._cfg.read("/etc/interact-iv/modules.d/eventsapi.ini")
+
+    def _initialise_client(self):
+        log.msg("Initialising DB client.")
+        self.db = ReconnectingConnectionPool(
+            "MySQLdb",
+            cp_reconnect=True,
+            host=self._cfg.get('Database', 'hostname'),
+            db=self._cfg.get('Database', 'database'),
+            user=self._cfg.get('Database', 'username'),
+            passwd=self._cfg.get('Database', 'password'))
+
+        self.records_client = RecordsAPIClient(
+            self._cfg.get('Records', 'apikey'),
+            self._cfg.get('Records', 'host'),
+            self._cfg.getint('Records', 'port'),
+            self._cfg.getboolean('Records', 'use_ssl'))
+
+    @defer.inlineCallbacks
+    def get_project_ref(self, whitelabel, project):
+        project_ref = yield self.db.runInteraction(
+            get_project_ref,
+            whitelabel,
+            project
+        )
+        defer.returnValue(project_ref)
+
+    @defer.inlineCallbacks
+    def add_record(self, project_ref, project, record_data):
+        try:
+            vocal_record_id = yield self.db.runInteraction(
+                self._add_record_interaction,
+                project_ref,
+                project,
+                record_data
+            )
+        except DatabaseException as e:
+            if e.code == 1062:
+                print "Record already in records api : %s" % repr(record_data)
+                defer.returnValue(False)
+
+            else:
+                raise
+
+        try:
+            # Trigger recordsapi
+            yield self.records_client.records.create(id=vocal_record_id)
+            print "Imported record [%s]" % vocal_record_id
+
+            defer.returnValue(True)
+
+        except Exception as e:
+            print "Error: %s" % str(e)
+            print "Failed to retrieve record on consistent [%s] %s" % (
+                vocal_record_id, repr(record_data))
+
+            defer.returnValue(False)
+
+    __types_map = {
+        'appAgent': 'agent',
+        'appSupervisor': 'agent',
+        'sceQueue': 'queue',
+        'sceTransfert': 'svi'
+    }
+
+    def _add_record_interaction(self, transaction, project_ref, project, data):
+        # RC.sessionid, RC.recordOrigin, RC.agentid, AVAU.nom,
+        # RC.queueid, AVQ.nom, AVAP.nom, RC.dtecreated, RC.caller, RC.called
+        time = parser.parse(str(data[7]))
+
+        values = {
+            'start_time': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'start_tz': time.strftime("%z"),
+            'stop_time': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'stop_tz': time.strftime("%z"),
+            'source_type': self.__types_map.get(data[1], 'agent'),
+            'call_session_id': data[0],
+            'project_ref': project_ref,
+        }
+
+        if time > UPGRADE_DATE:
+            if values['source_type'] in ('agent', 'supervisor'):
+                values['ccc_path'] = "cdep://%s/%s/%s-%s.wav" % (
+                    project,
+                    time.strftime("%Y-%m-%d"),
+                    data[2],  # login
+                    time.strftime("%Y-%m-%dT%H:%M:%S")
+                )
+            else:
+                values['ccc_path'] = "cdep://%s/%s/%s.wav" % (
+                    project,
+                    time.strftime("%Y-%m-%d"),
+                    data[0]
+                )
+        else:
+            values['ccc_path'] = "cdep://%s/%s" % (project, data[0])
+
+        if data[2]:
+            values['user_ref'] = get_user_ref(
+                transaction, project_ref, 'agent', data[2], data[3] or data[2])
+
+        if data[4]:
+            queue_ref = get_queue_ref(transaction, data[4])
+
+            values['vocal_queue_ref'] = get_vocal_queue_ref(
+                transaction,
+                data[5] or data[4],
+                queue_ref
+            )
+
+        communication_values = {
+            'channel': "vocal",
+            'project_ref': project_ref,
+            'communication_type': 'inbound',
+            'communication_id': data[0],
+            'from': data[8],
+            'to': data[9]
+        }
+
+        values['communication_ref'] = update_communication(
+            transaction, **communication_values)
+
+        vocal_record_id = create_dynamic_resource_transaction(
+            transaction, 'VocalRecords', **values)
+
+        if data[2]:
+            session_ref = get_channel_session_ref(
+                transaction, 'vocal', "%s_import" % data[2])
+
+            if data[6]:
+                update_resource_transaction(
+                    transaction,
+                    'Sessions',
+                    {'id': session_ref},
+                    project_ref=project_ref,
+                    updated=utc_microseconds(),
+                    profile_ref=get_profile_ref(transaction, data[6]),
+                    user_ref=values['user_ref']
+                )
+
+            transaction.execute(
+                """INSERT INTO `VocalRecordsSessions`
+                    (`record_ref`, `session_ref`)
+                VALUES (%s, %s)""",
+                (vocal_record_id, session_ref)
+            )
+
+        return vocal_record_id
+
+
+class WebAdminClient(Client):
+    def _parse_credentials(self, args):
+        self._wa_host = args.webadmin_host
+        self._wa_username = args.webadmin_user
+        self._wa_password = args.webadmin_password \
+            or getpass.getpass("WebAdmin DB password: ")
+        self._wa_db_name = args.webadmin_db
+        self._portal_host = args.portal_host
+        self._portal_username = args.portal_user
+        self._portal_password = args.portal_password \
+            or self._wa_password
+        self._portal_db_name = args.portal_db
+
+    def _initialise_client(self):
+        log.msg("Initialising DB client.")
+        self.db = ReconnectingConnectionPool(
+            "MySQLdb",
+            cp_reconnect=True,
+            host=self._wa_host,
+            db=self._wa_db_name,
+            user=self._wa_username,
+            passwd=self._wa_password)
+
+        self.portal = ReconnectingConnectionPool(
+            "MySQLdb",
+            cp_reconnect=True,
+            host=self._portal_host,
+            db=self._portal_db_name,
+            user=self._portal_username,
+            passwd=self._portal_password)
+
+    @defer.inlineCallbacks
+    def get_customer_id(self, whitelabel, project):
+        result = yield self.portal.runQuery(
+            "select customerid from adm_customers "
+            "where cccid = %(project)s "
+            "and provider_id = %(whitelabel)s",
+            {
+                'whitelabel': whitelabel,
+                'project': project
+            }
+        )
+
+        if len(result) < 1:
+            die("Project %s/%s not found." % (whitelabel, project))
+        else:
+            defer.returnValue(result[0][0])
+
+    @defer.inlineCallbacks
+    def get_records(self, customer_id, start_date, end_date):
+        result = yield self.db.runQuery(
+            "select RC.sessionid, RC.recordOrigin, RC.agentid, AVAU.nom, "
+            "  RC.queueid, AVQ.nom, AVAP.nom, RC.dtecreated, RC.caller, "
+            "  RC.called "
+            "from records_callcontact as RC "
+            "left outer join adm_vocal_agents_users as AVAU"
+            "  on AVAU.configuration like CONCAT('%%s:5:\"login\";"
+            "s:', LENGTH(RC.agentid), ':\"', RC.agentid, '\";%%') "
+            " COLLATE latin1_general_ci "
+            "  and AVAU.user = RC.user "
+            "left outer join adm_vocal_queues as AVQ"
+            "  on AVQ.configuration like CONCAT('%%s:3:\"nom\";"
+            "s:', LENGTH(RC.queueid), ':\"', RC.queueid, '\";%%') "
+            " COLLATE latin1_general_ci "
+            "  and AVQ.user = RC.user "
+            "left outer join adm_vocal_agents_profiles as AVAP"
+            "  on AVAP.id = RC.profileid "
+            "where RC.user = %(customer_id)s "
+            "and RC.dtecreated between %(start_date)s and %(end_date)s",
+            {
+                'customer_id': customer_id,
+                'start_date': start_date,
+                'end_date': end_date
+            }
+        )
+
+        defer.returnValue(result)
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Import records from webadmin to records api.")
+
+    parser.add_argument(
+        '-p', '--project', required=True,
+        help="project name to which the import should be limited. ")
+    parser.add_argument(
+        '-w', '--whitelabel', required=True,
+        help="whitelabel name to which the import should be limited.")
+
+    parser.add_argument(
+        '-s', '--start-date', required=True,
+        help=("Start date for records import. Ex: '2015-08-01' "
+              "or '2015-08-01 10:00:00'"))
+    parser.add_argument(
+        '-e', '--end-date', required=True,
+        help=("End date for records import. Ex: '2015-08-01' "
+              "or '2015-08-01 10:00:00'"))
+
+    parser.add_argument(
+        '--webadmin-host', required=True,
+        help="hostname or address of the WebAdmin host.")
+    parser.add_argument(
+        '--webadmin-db', required=True,
+        help="database name of WebAdmin.")
+    parser.add_argument(
+        '--webadmin-user',
+        help="username of the WebAdmin database. Default value: %s" %
+        DEFAULT_SQL_USER,
+        default=DEFAULT_SQL_USER)
+    parser.add_argument(
+        '--webadmin-password',
+        help="password of the WebAdmin database.")
+
+    parser.add_argument(
+        '--portal-host',
+        help="hostname or address of the Portal host. Default: webadmin-host")
+    parser.add_argument(
+        '--portal-db',
+        help="database name of Portal. Default: %s" % DEFAULT_PORTAL_DB,
+        default=DEFAULT_PORTAL_DB)
+    parser.add_argument(
+        '--portal-user',
+        help="username of the Portal database. Default: webadmin-user")
+    parser.add_argument(
+        '--portal-password',
+        help="password of the Portal database. Default: webadmin-password")
+
+    args = parser.parse_args()
+
+    for arg in ('host', 'user', 'password'):
+        if not getattr(args, 'portal_%s' % arg, False):
+            setattr(
+                args, 'portal_%s' % arg,
+                getattr(args, 'webadmin_%s' % arg)
+            )
+
+    return args
+
+
+@defer.inlineCallbacks
+def main(args):
+    log.startLogging(sys.stdout)
+    log.msg("IV2US 2.2 import records script starting up.")
+
+    try:
+        wa_client = WebAdminClient(args)
+        api_client = APIClient(args)
+
+        customer_id = yield wa_client.get_customer_id(
+            args.whitelabel, args.project)
+        project_ref = yield api_client.get_project_ref(
+            args.whitelabel, args.project)
+
+        log.msg(
+            "Starting import for project %s->%s "
+            "with customer_id : %s and project_ref : %s "
+            "from %s to %s" %
+            (
+                args.whitelabel, args.project,
+                customer_id, project_ref,
+                args.start_date, args.end_date
+            )
+        )
+        records = yield wa_client.get_records(
+            customer_id, args.start_date, args.end_date)
+
+        count = 0
+
+        for record in records:
+            result = yield api_client.add_record(
+                project_ref, args.project, record)
+
+            if result:
+                count += 1
+
+        print ("Finished import for project %s->%s : %d/%d records imported."
+               % (args.whitelabel, args.project, count, len(records)))
+
+    except SystemExit:
+        pass
+
+    reactor.stop()
+
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    main(args)
+    reactor.run()

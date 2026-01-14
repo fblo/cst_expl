@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+DIAG_TEMP=/src/tmp
+
+a=$(basename $(ls -1 $DIAG_TEMP/log_* | head -n 1))
+if [[ "$a" == "" ]];then
+	echo "ERREUR : pas de fichier de log cst dans $DIAG_TEMP trouvé."
+	exit 1
+fi
+jour=${a:4:10}
+
+rm $DIAG_TEMP/*.clog 2> /dev/null
+rm $DIAG_TEMP/.*.swp 2> /dev/null
+first=1
+for id in "$@"; do
+	session_id=$(ivlog-debug $DIAG_TEMP $jour all_id --all 1 | awk '{sid[$2]=$2} END{for(s in sid) print s;}' | grep _$id@ | tail -n 1) 
+	if [[ "$session_id" != "" ]]; then
+		echo ${session_id%@*}.clog
+		ivlog-debug $DIAG_TEMP $jour $session_id | awk '$2 == "[event]" { if(match($3, /(.*)@[0-9]+\.[0-9]+\.(.*)\./, src)) $3=src[1] "@" src[2]; if(match($4, /(.*)@[0-9]+\.[0-9]+\.(.*)\./, src)) $4=src[1] "@" src[2];}{ print $0}' > $DIAG_TEMP/${session_id%@*}.clog
+		vi_files="$vi_files $DIAG_TEMP/${session_id%@*}.clog"
+		if [[ $first == "1" ]]; then
+			first=0
+		else
+			vi_cmds="$vi_cmds -c sp -c n"
+		fi
+	fi
+done
+vim $vi_files $vi_cmds

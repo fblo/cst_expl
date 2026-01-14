@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+from cccp2.project import ProjectConfig, ConfigDB
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+#parser.add_argument("how_many", help="How many calls to show", default=1, nargs="?", type=int)
+parser.add_argument("project", help="Consistent project name", default="CNXTESTSUITE", nargs="?")
+parser.add_argument("-i","--ip", help="Host IP", default="127.0.0.1", nargs="?")
+#parser.add_argument("-d", "--with-dates", help="Print datetimes", action="store_true")
+args = parser.parse_args()
+
+
+# Les points d'entrées voip, correspondants aux numéros appelés lors des appels entrants, 
+# sont décrits dans la configuration applicative du processus Voip du projet Main. 
+# Chaque point d'entrée voip est associé à un point d'entrée ccxml d'un projet .
+cdb = ConfigDB()    # Connexion à la racine de la base de données CST.
+voip_config = cdb.get("/db/projects/Main/Voip.xml")
+
+# Les points d'entrées ccxml sont décrits dans le fichier Ccxml.xml de chaque projet. 
+pdb = ProjectConfig(args.project,ip=args.ip)   # Connexion au répertoire du projet dans la base de données CST. 
+ccxml_config = pdb.get("Ccxml.xml")
+
+# Pour chaque point d'entrées ccxml du projet
+# on crée la liste des points d'entrées voip (numéros) associés. 
+# Note : le webadmin ne faisant qu'une association 1-1, cette liste ne comportera qu'un numéro unique...
+entries_numbers = {}
+for e in voip_config.entrys:
+    if e.project_name == args.project:
+        if e.entry_point_name in entries_numbers:
+            numbers = entries_numbers[e.entry_point_name]
+        else:
+            numbers = []
+        entries_numbers[e.entry_point_name] = numbers + [e.value]
+
+# On parcourt ensuite la liste des points d'entrées ccxml du projet en affichant les infos
+# qui nous intéressent : nom du point d'entrée ccxml, type de session et numéros associés (=points d'entrées voip)
+print('[NAME'.ljust(50,' ') + 'TYPE'.ljust(20,' ') + 'NUMBERS]')
+for e in ccxml_config.entrys:
+    session_type = None
+    for v in e.values:
+        if v.name == 'project_type_cfg':
+            session_type = v.value 
+    print(e.name.ljust(50,' ') + session_type.ljust(20,' ') + (",".join(entries_numbers[e.name] if e.name in entries_numbers else "")) )
+
+pdb.stop()
+cdb.stop()

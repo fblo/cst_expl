@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+DIAG_TEMP=/src/tmp
+
+a=$(basename $(ls -1 $DIAG_TEMP/log_* | head -n 1))
+if [[ "$a" == "" ]];then
+	echo "ERREUR : pas de fichier de log cst dans $DIAG_TEMP trouvé."
+	exit 1
+fi
+jour=${a:4:10}
+
+session_id=$1
+if [[ "$session_id" != "" ]]; then
+	ivlog-debug $DIAG_TEMP $jour $session_id | awk '$2 == "[event]" { if(match($3, /(.*)@[0-9]+\.[0-9]+\.([^.]*)\./, src)) $3=src[1] "@" src[2]; if(match($4, /([^.]*)@[0-9]+\.[0-9]+\.(.*)\./, src)) $4=src[1] "@" src[2];}{ print $0}' 
+fi

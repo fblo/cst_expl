@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+
+source iv-new-project >/dev/null 2>&1 \
+	|| (echo "Couldn't find \`iv-new-project'. Exiting." && exit 2)
+
+show_help() {
+	cat << EOF
+Usage: ${0##*/} [-h] [-s SERVER] PROJECT ACTION
+
+Enable or disable the scheduler for a project on an IV2US vocal node.
+The process will use static ports, so the server should have been converted to
+using static ports prior to using this script. If the server is using dynamic
+port allocation, please use the old \`socket_client' binary. If SERVER is
+provided, use that address instead of \`localhost' to talk to the server.
+
+Positional arguments:
+    PROJECT       the name of the project.
+    ACTION        'enable' or 'disable'.
+
+Options:
+    -h        display this help message and exit.
+    -s SERVER specify the address of the server to which we should connect. If
+              not provided, this will default to \`localhost'.
+EOF
+}
+
+file_exists() {
+	ccc_cat $@ >/dev/null 2>&1
+}
+
+main() {
+	init_globals
+	check_binaries
+
+	export server_address="$1"
+	local project="$2"
+	local action="$3"
+
+	if ! project_exists "$project"; then
+		die "Project \`$project' not found on this server."
+	else
+		local active="0"
+		local process_name="Scheduler"
+		local process_type="ccenter_scheduler"
+		local port="$(get_port_for_process "$process_type" "$project" \
+			"$(get_current_project_base_port "$project")")"
+
+		if [[ $action == "enable" ]]; then
+			debug "Enabling scheduler for project : \`$project'"
+			active="1"
+		else
+			debug "Disabling scheduler for project : \`$project'"
+		fi
+
+		local path="$(get_path_for_process "$process_name" "$project")"
+		local filename="$(get_local_filename "$path")"
+
+		cat <<HEREDOC > "$filename"
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<com.consistent.ccenter.scheduler.ccenter_scheduler_process id="_1"
+		class_name="scheduler" process_name="ccenter_scheduler"
+		max_stop_duration="2000" max_respawn_count="5"
+		max_respawn_duration="10000" retry_interval="2000"
+		big_retry_interval="5000" active="$active" scheduling_policy="0"
+		scheduling_priority="0" lock_memory="0" max_http_cache_item_size="0"
+		max_http_cache_item_expires="0" http_cache_reset_date=""
+		listen_port="$port">
+	<explorer_modules>
+		<ccenter_scheduler_process_explorer_module id="_200001"
+				path_name="/store_outbound" process_class="consistent_store"
+				strict="0" remove_path="1"/>
+	</explorer_modules>
+	<outbounds_locations>
+		<ccenter_scheduler_process_outbounds_location id="_2"
+				path_name="cdep://store_outbound/outbound"/>
+	</outbounds_locations>
+</com.consistent.ccenter.scheduler.ccenter_scheduler_process>
+HEREDOC
+
+		put_file "$path"
+		rm -rf "$filename"
+	fi
+
+	delete_caches
+}
+
+if [[ $0 =~ iv-toggle-scheduler ]]; then
+	server="localhost"
+
+	while getopts "hs:" opt; do
+		case "$opt" in
+			h)
+				show_help
+				exit 0
+				;;
+
+			s)
+				server="$OPTARG"
+				;;
+
+			'?')
+				show_help >&2
+				exit 1
+				;;
+		esac
+	done
+
+	project="${@:$OPTIND:1}"
+	action="${@:$OPTIND+1:2}"
+
+	if [[ $project == "" ]]; then
+		die "The PROJECT argument is required."
+	fi
+
+	if [[ $action == "" ]]; then
+		die "The ACTION argument is required."
+	elif [[ ! $action =~ ^(en|dis)able$ ]]; then
+		die "The ACTION argument must be one of 'enable', 'disable'."
+	fi
+
+	main "$server" "$project" "$action"
+fi

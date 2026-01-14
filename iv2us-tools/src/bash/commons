@@ -1,0 +1,83 @@
+#!/bin/bash
+# commons
+
+
+function log {
+    echo "$(date +'%Y-%m-%d %H:%M:%S') $1" 
+}
+
+function sql_date {
+    local a=$1
+    echo ${a:0:4}-${a:4:2}-${a:6:2}
+}
+
+function sql_month {
+    local a=$1
+    echo ${a:0:4}-${a:4:2}
+}
+
+function file_date {
+    local a=$1
+    echo ${a:0:4}_${a:4:2}_${a:6:2}
+}
+function short_date {
+	local a=$1
+	local a=${a//_}
+	echo ${a//-}
+}
+
+function sql_query {
+        local tmp_file=$(mktemp)
+        if [[ "$2" == "" ]]
+        then
+                local h=$DB_HOST
+                local n=$DB_NAME
+                echo "$1" |  mysql -N -h $DB_HOST $DB_NAME 2> $tmp_file
+        else
+				local h=$2_DB_HOST
+				local n=$2_DB_NAME
+				echo "$1" | mysql --defaults-group-suffix=$2 -N $delim -h ${!h} ${!n} 2> $tmp_file
+        fi
+        local sql_ret_value=$?
+        if [[ "$sql_ret_value" != "0" ]]
+        then
+                local sql_err_msg=$(<$tmp_file)
+                log "ERROR : Executing SQL query : \"$1\" on $h:$n : throw this error : \"$sql_err_msg\""
+        fi
+# FBLO, remplacé "rm" par "rm -f"
+        rm -f $tmp_file
+        (exit $sql_ret_value)
+}
+
+function sql_count {
+	sql_query "select count(*) from $1"
+}
+
+function sql_affected {
+	sql_query "select row_count()"
+}
+
+
+# Convertit un json contenant une table (ce qui n'est pas des plus efficace)
+# en valeurs séparées par des tabulations
+function json_to_table {
+	# sed supprime les double guillemets
+	# Le premier awk extrait uniquement les portions contenant un enregistrement : en partant du principe qu'un enregistrement commence par un champ nommé "id".
+	# Le deuxième awk extrait les valeurs des champs seulement si le nom du champ ne se termine pas par "id".
+	# Sur le premier enregistrement il extrait aussi le nom des champs.
+	# Le caractère de séparation de la table résultat est la tabulation.
+
+	sed 's/"//g' | awk 'BEGIN{RS="{|}"} $0 ~ /^id/ {print $0}' | awk -F ",|:" '{s="";for(i=1;i<=NF;i+=2){if($i !~ /id$/) { if(NR==1) e = e "\t" $i; s = s "\t" $(i+1);}} if(NR==1) print e; print s}'
+}
+
+# Importe dans une table $2
+# les données du fichier $1 a un format de collecte (une "insert value sql" par ligne)
+function collect_to_db {
+	# echo -e "insert into batch_sbc values \c"              :    \c Ramène le cursor sur la ligne courante et supprime le retour charriot
+	# (echo -e "insert into batch_sbc values \c";cat $1)     :    Ajoute la partie insert au début de la première ligne de $1
+	# sed 's/$/,/'                                            :    Remplace les retours charriots par des virgules, il y en aura une de trop en fin de fichier
+	# sed '$ s/.$//'                                         :    Retire la dernière virgule  $ = appliquer la règle sur la dernière ligne uniquement.
+	#                                                        :    Règle = remplacer le dernier caractère avant la fin de ligne par rien.
+
+	(echo -e "insert into $2 values \c";cat $1) |sed 's/$/,/' | sed '$ s/.$//' | mysql -h $DB_HOST $DB_NAME
+}

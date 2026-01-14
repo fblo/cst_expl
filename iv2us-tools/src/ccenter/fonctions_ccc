@@ -1,0 +1,99 @@
+
+function c_port {
+	ccc_cat /proc/consistent_1/Head_Main/Head_$2/Ccxml $1 | awk 'NR>1{print $5}' | awk -F "\"" '{print $2}'
+}
+function d_port {
+	ccc_cat /proc/consistent_1/Head_Main/Head_$2/Dispatch $1 | awk 'NR>1{print $5}' | awk -F "\"" '{print $2}'
+}
+function f_sess {
+	ccenter_report -login XXX -password XXX -server $1 $2 -path /dispatch -list -field sessions -filter ".[ terminate_date eq '']" -fields "row.session_id;row.create_date;"| column -s "\|" -t
+}
+function f_user_sess {
+	ccenter_report -login XXX -password XXX -server $1 $2 -path /dispatch -list -field sessions -filter ".[ terminate_date eq '']" -fields "row.user.login;row.session_id;row.create_date;" | grep -v undefined | column -s "\|" -t
+}
+function s_proj {
+	ccc_ls /db/projects $1 | grep -v "^Main\|^Default\|^IVEXP" | awk -F "|" '{print $1}'
+}
+function s_sess {
+	for p in $(s_proj $1); do
+		f_sess $1 $(d_port $1 $p) | awk -v p=$p '{print p,$0}';
+	done
+}
+function sess_kill {
+	ccenter_update -login XXX -password XXX -server $1 $(c_port $1 $2) -kill_session $3
+}
+function server_projects {
+	s_proj $1
+}
+function project_servers {
+	projects_servers | grep "^$1 " | awk '{print $2}'
+}
+
+function projects {
+	projects_servers | awk '{a[$1]=$1}END{for (v in a) print v}'
+}
+function project_users {
+	n=$(project_servers $1 | wc -l)
+	if [[ "$n" == "0"  ]]; then
+		echo "Projet inconnu" >&2
+	else
+		if [[ "$n" != "1" ]];then
+			echo "Utilisez server_project_sessions sur un des serveurs : " >&2
+			project_servers $1 >&2
+		else
+			s=$(project_servers $1)
+			server_project_users $s $1
+		fi
+	fi
+}
+function project_sessions {
+	n=$(project_servers $1 | wc -l)
+	if [[ "$n" == "0"  ]]; then
+		echo "Projet inconnu" >&2
+	else
+		if [[ "$n" != "1" ]];then
+			echo "Utilisez server_project_sessions sur un des serveurs : " >&2
+			project_servers $1 >&2
+		else
+			s=$(project_servers $1)
+			server_project_sessions $s $1
+		fi
+	fi
+}
+
+function server_project_sessions {
+	f_sess $1 $(d_port $1 $2)
+}
+
+function server_project_users {
+	f_user_sess $1 $(d_port $1 $2)
+}
+function server_sessions {
+	s_sess $1
+}
+function servers {
+	echo "select cccip, hostname from master_vocalnodes" | mysql -h $PORTAIL interactivdbmaster | awk 'NR>1{print $0}'
+}
+function server_kill_session {
+	p=$(server_sessions $1 | grep $2 | awk '{print $1}')
+	ccenter_update -login XXX -password XXX -server $1 $(c_port $1 $p) -kill_session $2	
+}
+function db-update {
+	for s in $(servers|grep -v bck | awk '{print $1}'); do server_projects $s | awk -v s=$s '{print $0,s}'; done  > projects.db
+}
+
+function projects_servers {
+	if [[ "$(ls -l --time-style=+%Y%m%d projects.db 2> /dev/null | awk '{print $6}')" != "$(date +%Y%m%d)" ]]; then
+		db-update;
+	fi
+	cat projects.db
+}
+
+function project_kill_user 
+{
+	s=$(project_users $1 | grep "^$2 " | awk '{print $2}')
+	if [[ "$s" != "" ]];then
+		m=$(project_servers $1)
+		server_kill_session $m $s
+	fi
+}

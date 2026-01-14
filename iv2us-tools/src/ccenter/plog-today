@@ -1,0 +1,82 @@
+#!/bin/bash
+
+DIAG_TEMP=/src/tmp
+
+USAGE='Usage: plog-get PROJET JOUR [HOST]
+	Copie dans $DIAG_TEMP les logs binaires consistent du JOUR pour un PROJET à partir du serveur de médiation. 
+	Ou affiche les chemins lorsqui''il y a plusieurs répertoires de logs binaires
+	HOST précise de quel serveur on souhaite les logs binaires
+'
+
+
+if [[ "$1" == "-h" || ( $# -lt 2 ) ]]
+then
+    echo -e "$USAGE"
+    exit 1
+fi
+
+if [[ $# -eq 3 ]]
+then
+	host=$3
+fi
+
+
+function short_date {
+	local a=$1
+	local a=${a//_}
+	echo ${a//-}
+}
+
+function file_date {
+    local a=$1
+	echo ${a:0:4}_${a:4:2}_${a:6:2}
+}
+
+function sql_date { 
+    local a=$1
+	echo ${a:0:4}-${a:4:2}
+}
+
+projet=$1
+jour=$(short_date $2)
+
+rm -f $DIAG_TEMP/*.log
+
+serveurs=$(grep "$projet$" plog.db)
+if [[ $(echo "$serveurs" | wc -l) > 1 && "$host" == "" ]]
+then
+	echo "Même projet sur plusieurs serveurs"
+	echo "$serveurs"
+	exit 99
+fi	
+if [[ "$host" == "" ]];then
+	serveur=$(echo "$serveurs" | awk '{print $1}')
+else
+	serveur=$host
+fi
+# On regarde dans l'arborescence de logs CST de ce serveur et projet.
+serveurs_2=$(ls /stofr501/$serveur/opt/consistent/logs/$projet/Logger/$projet/_/ccenter_ccxml/Ccxml/)
+for serveur_2 in $serveurs_2; do
+	files=$(ls /stofr501/$serveur/opt/consistent/logs/$projet/Logger/$projet/_/ccenter_ccxml/Ccxml/$serveur_2/log_$(file_date $jour)*);
+	if [[ $? == 0 ]]
+	then
+		if [[ "$log_files" != "" ]]
+		then
+			echo "ERREUR : Fichiers de logs multiples !"
+			echo $serveurs_2
+			exit 7
+		fi
+		log_files=files
+		from=/stofr501/$serveur/opt/consistent/logs/$projet/Logger/$projet/_/ccenter_ccxml/Ccxml/$serveur_2/
+	fi
+done
+
+cp $from/log_$(file_date $jour)__*.log $DIAG_TEMP
+cp $from/log_$(file_date $jour)__*.log.bz2 $DIAG_TEMP
+for logfile in `ls -1 $DIAG_TEMP/log_${jour:0:4}_${jour:4:2}*.bz2 2> /dev/null`; do
+bzip2 -d $logfile 2> /dev/null;
+done
+rm $DIAG_TEMP/*.bz2
+
+
+

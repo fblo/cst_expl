@@ -6,8 +6,9 @@
 
 import sys
 from twisted.internet import reactor, defer
-from cccp.async.dispatch import DispatchClient
+from cccp.async_module.dispatch import DispatchClient
 import cccp.protocols.messages.explorer as message
+
 
 class TestProxyClient(DispatchClient):
     def __init__(self, name, ip, port, login, password):
@@ -28,7 +29,7 @@ class TestProxyClient(DispatchClient):
     def on_login_failed(self, session_id, reason):
         reason_str = reason
         if isinstance(reason, bytes):
-            reason_str = reason.decode('utf-8', errors='replace')
+            reason_str = reason.decode("utf-8", errors="replace")
         print("  -> ERROR: login failed - %s" % reason_str)
         self.stop_proxy_info()
 
@@ -43,10 +44,10 @@ class TestProxyClient(DispatchClient):
         reactor.callLater(5, self.list_proxy_info)
 
     def list_proxy_info(self):
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("=== Proxy MPU_PREPROD - Tableau de bord =============")
-        print("="*60)
-        
+        print("=" * 60)
+
         # Details des queues
         print("\n{:*^60}".format(" QUEUES (%d) " % len(self.get_queues())))
         for q_id in self.get_queues()[:20]:
@@ -55,12 +56,12 @@ class TestProxyClient(DispatchClient):
             if data and isinstance(data, list):
                 info = self._format_queue_data(data)
                 if info:
-                    print("\n  [Queue %s] %s" % (q_id, info.get('display_name', 'N/A')))
+                    print("\n  [Queue %s] %s" % (q_id, info.get("display_name", "N/A")))
                     print("  " + "-" * 50)
                     for key, value in info.items():
-                        if key != 'display_name' and value is not None:
+                        if key != "display_name" and value is not None:
                             print("    %-30s: %s" % (key, value))
-        
+
         # Details des utilisateurs
         print("\n{:*^60}".format(" UTILISATEURS (%d) " % len(self.get_users())))
         for u_id in self.get_users()[:20]:
@@ -69,14 +70,21 @@ class TestProxyClient(DispatchClient):
             if data and isinstance(data, list):
                 info = self._format_user_data(data)
                 if info:
-                    print("\n  [Utilisateur %s] %s (%s)" % (u_id, info.get('login', 'N/A'), info.get('name', 'N/A')))
+                    print(
+                        "\n  [Utilisateur %s] %s (%s)"
+                        % (u_id, info.get("login", "N/A"), info.get("name", "N/A"))
+                    )
                     print("  " + "-" * 50)
                     for key, value in info.items():
-                        if key not in ['login', 'name'] and value is not None:
+                        if key not in ["login", "name"] and value is not None:
                             print("    %-30s: %s" % (key, value))
-        
+
         # Details des sessions de communication
-        print("\n{:*^60}".format(" SESSIONS (%d) " % len(self.get_communication_sessions())))
+        print(
+            "\n{:*^60}".format(
+                " SESSIONS (%d) " % len(self.get_communication_sessions())
+            )
+        )
         sessions = self.get_communication_sessions()
         if sessions:
             for s_id in sessions[:20]:
@@ -94,7 +102,11 @@ class TestProxyClient(DispatchClient):
             print("  Aucune session active")
 
         # Details des outbound sessions
-        print("\n{:*^60}".format(" SESSIONS OUTBOUND (%d) " % len(self.get_outbound_sessions())))
+        print(
+            "\n{:*^60}".format(
+                " SESSIONS OUTBOUND (%d) " % len(self.get_outbound_sessions())
+            )
+        )
         outbound = self.get_outbound_sessions()
         if outbound:
             for s_id in outbound[:20]:
@@ -106,7 +118,7 @@ class TestProxyClient(DispatchClient):
         else:
             print("  Aucune session outbound active")
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         self.stop_proxy_info()
 
     def _format_queue_data(self, data):
@@ -119,7 +131,7 @@ class TestProxyClient(DispatchClient):
                 field_name = fields[i]
                 if isinstance(value, bytes):
                     try:
-                        value = value.decode('utf-8')
+                        value = value.decode("utf-8")
                     except:
                         pass
                 result[field_name] = value
@@ -135,12 +147,12 @@ class TestProxyClient(DispatchClient):
                 field_name = fields[i]
                 if isinstance(value, bytes):
                     try:
-                        value = value.decode('utf-8')
+                        value = value.decode("utf-8")
                     except:
                         pass
                 result[field_name] = value
         return result
-    
+
     def _format_session_data(self, data):
         if not data or len(data) < 2:
             return None
@@ -151,7 +163,7 @@ class TestProxyClient(DispatchClient):
                 field_name = fields[i]
                 if isinstance(value, bytes):
                     try:
-                        value = value.decode('utf-8')
+                        value = value.decode("utf-8")
                     except:
                         pass
                 result[field_name] = value
@@ -177,7 +189,7 @@ class TestProxyClient(DispatchClient):
             return list(view.keys())
         except:
             return []
-    
+
     def get_outbound_sessions(self):
         try:
             view = self.tables[self.outbound_communication_session_view_idx][0]
@@ -197,13 +209,17 @@ class TestProxyClient(DispatchClient):
             pass
         reactor.stop()
 
-def test_proxy(ip='10.199.30.67', port=20101, login='supervisor_gtri', password='toto', wait=3):
+
+def test_proxy(
+    ip="10.199.30.67", port=20101, login="supervisor_gtri", password="toto", wait=3
+):
     print("Connexion proxy à %s:%s..." % (ip, port))
     print("Login: %s/%s" % (login, password))
-    
+
     client = TestProxyClient("proxy_test", ip, port, login, password)
     client.connect()
     reactor.run()
+
 
 if __name__ == "__main__":
     ip = sys.argv[1] if len(sys.argv) > 1 else "10.199.30.67"
@@ -211,5 +227,5 @@ if __name__ == "__main__":
     login = sys.argv[3] if len(sys.argv) > 3 else "supervisor_gtri"
     password = sys.argv[4] if len(sys.argv) > 4 else "toto"
     wait = int(sys.argv[5]) if len(sys.argv) > 5 else 3
-    
+
     test_proxy(ip, port, login, password, wait)

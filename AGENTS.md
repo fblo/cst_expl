@@ -1,23 +1,18 @@
 # AGENTS.md
 
-## Commandes de build et test
-- Installation: `pip install -e .` (requiert pyparsing>=1.5,<3)
-- Exécuter les tests unitaires: `cd /tmp && PYTHONPATH=/home/fblo/Documents/repos/iv-cccp/src python3 -m unittest discover -s /home/fblo/Documents/repos/iv-cccp/tests/unit-tests -v`
-- Exécuter un seul test unitaire: Modifier `tests/do_one_test.py` pour importer la classe souhaitée depuis `unit_tests/`, puis exécuter `python3 tests/do_one_test.py`
-- Tests d'intégration: Nécessitent un serveur CCC réel (`python tests/do_tests.py`)
+## Build and test commands
+- Installation: `pip install -e .` (requires pyparsing>=1.5,<3)
+- Run unit tests: `cd /tmp && PYTHONPATH=/home/fblo/Documents/repos/explo-cst/src python3 -m unittest discover -s /home/fblo/Documents/repos/explo-cst/tests/unit-tests -v`
+- Run single test: Modify `tests/do_one_test.py` to import desired class from `unit-tests/`, then run `python3 tests/do_one_test.py`
+- Integration tests: Require real CCC server (`python3 tests/do_tests.py`)
 
-## Serveur Web Monitoring
-- Lancer le dashboard: `python3 web_server.py [port]`
-- Dashboard: http://localhost:5000
-- API REST: http://localhost:5000/api/{status,queues,users,sessions,events,projects,errors}
-- WebSocket: Connexion automatique pour mises à jour temps réel
-
-## Conventions de code
-- Code compatible Python 2/3 (pas de type hints, hériter de `object`)
-- Utiliser 4 espaces pour l'indentation
-- Inclure un en-tête: shebang, encodage, copyright, contact, auteurs
-- Noms de classes: PascalCase (ex: `BaseCcxmlClient`)
-- Fonctions/variables: snake_case (ex: `get_login_ok`)
-- Docstrings: Utiliser les annotations `:param type:` et `:raises:`
-- Imports: stdlib, tiers, local (ligne vide entre les groupes)
-- Gestion des erreurs: Lever des exceptions descriptives avec contexte
+## Code style guidelines
+- Python 2/3 compatible (no type hints, inherit from `object`)
+- Use 4 spaces for indentation
+- Include header: shebang, encoding, copyright, contact, authors
+- Class names: PascalCase (ex: `BaseCcxmlClient`)
+- Functions/variables: snake_case (ex: `get_login_ok`)
+- Docstrings: Use `:param type:` and `:raises:` annotations
+- Imports: stdlib, third-party, local (blank line between groups)
+- Error handling: Raise descriptive exceptions with context
+- File structure: Main source in `src/cccp/`, tests in `tests/unit-tests/`

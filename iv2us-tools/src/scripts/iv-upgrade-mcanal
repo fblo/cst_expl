@@ -1,0 +1,546 @@
+#!/bin/bash
+
+source iv-restart-modules >/dev/null 2>&1 \
+	|| (echo "Couldn't find \`iv-restart-modules'. Exiting." && exit 2)
+
+show_help() {
+	cat <<- EOF
+		Usage: ${0##*/} [-h][-c] WHITELABEL PROJECT
+
+		Upgrade target project from 2.1 to 2.3+ architecture.
+
+		Positional arguments:
+		    WHITELABEL        target whitelabel name.
+		    PROJECT           target project name.
+
+		Options:
+		    -h        display this help message and exit.
+		    -c        target ccc hostname.
+		    -w        target webadmin hostname.
+		    -d        webadmin database name (wXXTTTinteractivnetadmin).
+		    -u        webadmin database username (interactiv).
+		    -k        target overlord api key (configuration api).
+		    -f        extract configuration from target file.
+	EOF
+}
+
+die() {
+	>&2 echo "$1"
+	if [ $2 -lt 2 ]; then
+		show_help
+		exit 2
+	else
+		echo "Nothing left to do. Exiting."
+		exit $2
+	fi
+}
+
+blue_bold() {
+	echo "\e[1;38;5;117m$1\e[0m"
+}
+
+green_bold() {
+	echo "\e[1;38;5;112m$1\e[0m"
+}
+
+red_bold() {
+	echo "\e[1;38;5;9m$1\e[0m"
+}
+
+ask() {
+	if [ $# -ne 2 ]; then
+		cat >&2 <<-HEREDOC
+			function ask usage:
+			    ask question default answer
+			example: ask "How are you?" good
+		HEREDOC
+		exit 1
+	fi
+
+	echo -n "$1 [$2]: " && read answer
+	if [ "x$answer" == "x" ] || [ "$answer" == "$2" ] ; then
+		answer=$2
+		return 0
+	else
+		return 1
+	fi
+}
+
+ask_password() {
+	if [ $# -ne 2 ]; then
+		cat <<-HEREDOC
+			function ask_password usage:
+			    ask_password variable_name password_type
+			example: ask_password "db_password" "Admin"
+		HEREDOC
+		exit 6
+	fi
+
+	if [ ! -n "${!1}" ] ; then
+		echo -n "$2: "
+		stty -echo
+		read password
+		stty echo
+		echo
+		printf -v $1 "$password"
+	else
+		echo "$2 already set."
+	fi
+}
+
+ask_param() {
+	if [ $# -ne 3 ]; then
+		cat <<-HEREDOC
+			function ask_param usage:
+			    ask_param variable_name message default_value
+			example: ask_param "server_url" "Server IP Address" "127.0.0.1"
+		HEREDOC
+		exit 8
+	fi
+	if [ ! -n "${!1}" ] ; then
+		printf -v $1 "$3"
+		ask "$2?" "${!1}"
+		if [ $? -ne 0 ] ; then
+			printf -v $1 "$answer"
+		fi
+	else
+		echo "$2: ${!1}"
+	fi
+}
+
+pause() {
+	read -n1 -r -p "Press any key to continue... " key
+}
+
+require_variables() {
+	local error=false
+	local message="Error: Necessary variables aren't set.\nThis function requires:"
+
+	for var in "$@"; do
+		if [ ! -n "${!var}" ]; then
+			error=true
+			message="$message\n - $var: NOT SET!"
+		else
+			message="$message\n - $var: ok"
+		fi
+	done
+
+	if $error; then
+		printf "$message\n"
+		exit 19
+	fi
+}
+
+set_database() {
+	if [ $# -ne 4 ]; then
+		cat <<-HEREDOC
+			function set_database usage:
+			    set_database host name user password
+			example: set_database "127.0.0.1" "test" "root" "53cu43p455w0rd"
+		HEREDOC
+		exit 8
+	fi
+
+	_db_host="$1"
+	_db_name="$2"
+	_db_user="$3"
+	_db_pass="$4"
+}
+
+query() {
+	require_variables '_db_host' '_db_name' '_db_user' '_db_pass'
+
+	if [ $# -ne 1 ]; then
+		cat <<-HEREDOC
+			function query usage:
+			    query sql_query
+			example: query "select * from table_name where field_name = 1"
+		HEREDOC
+		exit 8
+	fi
+
+	mysql -h "$_db_host" -D "$_db_name" -u "$_db_user" -p"$_db_pass" -e "$1\G"
+}
+
+check_field() {
+	if [ $# -ne 2 ]; then
+		cat <<-HEREDOC
+			function check_field usage:
+			    check_field result field_name
+			example: check_field "$result" "name"
+		HEREDOC
+		exit 8
+	fi
+
+	echo "$(echo "$1"  | grep "$2: " | awk -F': ' '{print $2}')"
+}
+
+check_mcanal_right() {
+	require_variables "webadmin_host" "webadmin_db_user" "webadmin_db_pass" "project"
+
+	set_database "$webadmin_host" "interactivdbmaster" "$webadmin_db_user" "$webadmin_db_pass"
+	echo -en "$(blue_bold "Checking mcanal right... ")"
+	result="$(query "select count(*) as result from local_rights where cccid='$project' and local_rights.right = 'MCANAL'")"
+	[[ "$(check_field "$result" "result")" == "1" ]] && die "Project $project already has mcanal right." 3
+	echo -e "$(blue_bold "done")"
+}
+
+assert_project_is_callcontact() {
+	require_variables "webadmin_host" "webadmin_db_name" "webadmin_db_user" "webadmin_db_pass" "project"
+
+	set_database "$webadmin_host" "$webadmin_db_name" "$webadmin_db_user" "$webadmin_db_pass"
+	echo -en "$(blue_bold "Asserting project is callcontact... ")"
+	result="$(query "select distinct auth_vocal_callcenter from adm_customers where cccid='$project'")"
+	[[ "$(check_field "$result" "auth_vocal_callcenter")" != "1" ]] && die "Project $project is not callcontact." 4
+	echo -e "$(blue_bold "done")"
+}
+
+check_console_status() {
+	require_variables "webadmin_host" "webadmin_db_name" "webadmin_db_user" "webadmin_db_pass" "project"
+
+	set_database "$webadmin_host" "$webadmin_db_name" "$webadmin_db_user" "$webadmin_db_pass"
+	echo -en "$(blue_bold "Checking if console are enabled... ")"
+	result="$(query "select count(distinct auth_vocal_callcenter_cat) as result from adm_customers where cccid='$project' and auth_vocal_callcenter_cat LIKE '%consoleadmin%'")"
+	if [[ "$(check_field "$result" "result")" != "0" ]]; then
+		echo -e "$(green_bold "yes")"
+		return 0
+	else
+		echo -e "$(red_bold "no")"
+		return 1
+	fi
+}
+
+check_live_records() {
+	require_variables "webadmin_host" "webadmin_db_name" "webadmin_db_user" "webadmin_db_pass" "project"
+
+	set_database "$webadmin_host" "$webadmin_db_name" "$webadmin_db_user" "$webadmin_db_pass"
+	echo -en "$(blue_bold "Checking if a records import is needed... ")"
+	result="$(query "select count(*) as result from records_callcontact where user = (select distinct customerid from adm_customers where cccid='$project')")"
+	if [[ "$(check_field "$result" "result")" != "0" ]]; then
+		echo -e "$(green_bold "yes")"
+		return 0
+	else
+		echo -e "$(red_bold "no")"
+		return 1
+	fi
+}
+
+check_webadmin_api() {
+	require_variables "webadmin_host" "webadmin_db_name" "webadmin_db_user" "webadmin_db_pass" "project"
+
+	set_database "$webadmin_host" "$webadmin_db_name" "$webadmin_db_user" "$webadmin_db_pass"
+	echo -en "$(blue_bold "Checking for 2.1 API Key... ")"
+	result="$(query "select AuthToken from api_accounts where InteractivProject = '$project'")"
+	webadmin_api_key="$(check_field "$result" "AuthToken")"
+	if [[ "$webadmin_api_key" == "" ]]; then
+		echo -e "$(red_bold "creation required.")"
+	else
+		echo -e "$(green_bold "$webadmin_api_key")"
+	fi
+}
+
+migrate_callcontact() {
+	require_variables "webadmin_host" "webadmin_db_name" "webadmin_db_user" "webadmin_db_pass" "whitelabel" "project" "config_api_key"
+
+	echo -e "$(blue_bold "Processing callcontact migration... ")"
+	ask_param "portal_host" "Web Portal host" "svc-ics-prd-web-fr-505"
+	ask_param "api_host" "API Server host" "vs-ics-prd-iap-fr-501"
+	ask_param "portal_db_user" "Portal DB User" "$webadmin_db_user"
+	ask_password "portal_db_pass" "Portal DB password"
+
+	remote_command "$api_host" "$(cat <<- EOF
+		iv-migrate -w "$whitelabel" -p "$project" --api-host "$api_host" --api-port 8000 --api-no-ssl -k "$config_api_key" --portal-host "$portal_host" --portal-user "$portal_db_user" --portal-password "$portal_db_pass" --webadmin-host "$webadmin_host" --webadmin-db "$webadmin_db_name" --webadmin-user "$webadmin_db_user" --webadmin-password "$webadmin_db_pass"
+	EOF
+	)"
+	echo -e "$(blue_bold "done")"
+}
+
+add_mcanal_right() {
+	require_variables "web_node" "webadmin_host" "webadmin_db_user" "webadmin_db_pass" "project"
+
+	set_database "$webadmin_host" "interactivdbmaster" "$webadmin_db_user" "$webadmin_db_pass"
+	echo -en "$(blue_bold "Adding mcanal right... ")"
+	query "insert into local_rights values (NULL, '$web_node', '$project', 'MCANAL')"
+	echo -e "$(blue_bold "done")"
+}
+
+set_live_banner() {
+	require_variables "whitelabel" "project"
+
+	echo -e "$(blue_bold "Setting live banner... ")"
+	ask_param "ili_host" "iv-live-banner hostname" "vs-ics-prd-ili-fr-501"
+	ask_param "language_flag" "Project language (one of fr-FR, en-GB, es-ES, it-IT, pt-PT, de-DE)" "fr-FR"
+
+	filename="${whitelabel,,}/${project,,}.json"
+	cmd="$(cat <<- EOF
+		cd /usr/share/interact-iv/iv-live-banner/cfg
+		wl=\"\\\$(ls -1 | head -1)\"
+		cfg=\"\\\$(ls -1 \\\$wl | head -1)\"
+		mkdir -p ${whitelabel,,}
+		echo -n \"Creating $filename configuration file... \"
+		cp \"\\\$wl/\\\$cfg\" \"$filename\"
+		sed -i -e 's/\"language\" *: *\".*\"/\"language\": \"'$language_flag'\"/g' $filename
+		sed -i -e 's#\"file\" *: *\"css/.*.css\"#\"file\": \"css/'${whitelabel,,}'.css\"#g' $filename
+		echo \"done\"
+		cat $filename
+	EOF
+	)"
+	remote_root_command "$ili_host" "$cmd"
+	echo -e "$(red_bold "Please proceed to manual modifications of remote file /usr/share/interact-iv/iv-live-banner/cfg/$filename on $ili_host if above content is incorrect.")"
+	echo -e "$(blue_bold "done")"
+}
+
+set_live_supervisor() {
+	require_variables "whitelabel" "project"
+
+	echo -e "$(blue_bold "Setting live supervisor... ")"
+	ask_param "ili_host" "iv-live-supervisor hostname" "vs-ics-prd-ili-fr-501"
+	ask_param "language_flag" "Project language (one of fr-FR, en-GB, es-ES, it-IT, pt-PT, de-DE)" "fr-FR"
+
+	filename="${whitelabel,,}/${project,,}.json"
+	cmd="$(cat <<- EOF
+		cd /usr/share/interact-iv/iv-live-supervisor/cfg/
+		wl=\"\\\$(ls -1 | head -1)\"
+		cfg=\"\\\$(ls -1 \\\$wl | head -1)\"
+		mkdir -p ${whitelabel,,}
+		echo -n \"Creating $filename configuration file... \"
+		cp \"\\\$wl/\\\$cfg\" \"$filename\"
+		sed -i -e 's/\"language\" *: *\".*\"/\"language\": \"'$language_flag'\"/g' $filename
+		sed -i -e 's#\"file\" *: *\"tpl/.*/custom.css\"#\"file\": \"tpl/'${whitelabel,,}'/custom.css\"#g' $filename
+		echo \"done\"
+		cat $filename
+	EOF
+	)"
+	remote_root_command "$ili_host" "$cmd"
+	echo -e "$(red_bold "Please proceed to manual modifications of remote file /usr/share/interact-iv/iv-live-supervisor/cfg//$filename on $ili_host if above content is incorrect.")"
+	echo -e "$(blue_bold "done")"
+}
+
+set_live_console() {
+	require_variables "whitelabel" "project"
+
+	echo -e "$(blue_bold "Setting live console... ")"
+	ask_param "ili_host" "iv-live-console hostname" "vs-ics-prd-ili-fr-501"
+	ask_param "language_flag" "Project language (one of fr-FR, en-GB, es-ES, it-IT, pt-PT, de-DE)" "fr-FR"
+
+	filename="${whitelabel,,}/${project,,}.json"
+	cmd="$(cat <<- EOF
+		cd /usr/share/interact-iv/iv-live-console/cfg
+		wl=\"\\\$(ls -1 | head -1)\"
+		cfg=\"\\\$(ls -1 \\\$wl | head -1)\"
+		mkdir -p ${whitelabel,,}
+		echo -n \"Creating $filename configuration file... \"
+		cp \"\\\$wl/\\\$cfg\" \"$filename\"
+		sed -i -e 's/\"whitelabel\" *: *\".*\"/\"whitelabel\": \"'${whitelabel,,}'\"/g' $filename
+		sed -i -e 's/\"project\" *: *\".*\"/\"project\": \"'${project,,}'\"/g' $filename
+		sed -i -e 's/\"language\" *: *\".*\"/\"language\": \"'$language_flag'\"/g' $filename
+		sed -i -e 's#\"file\" *: *\"tpl/.*/custom.css\"#\"file\": \"tpl/'${whitelabel,,}'/custom.css\"#g' $filename
+		echo \"done\"
+		cat $filename
+	EOF
+	)"
+	remote_root_command "$ili_host" "$cmd"
+	echo -e "$(red_bold "Please proceed to manual modifications of remote file /usr/share/interact-iv/iv-live-console/cfg/$filename on $ili_host if above content is incorrect.")"
+	echo -e "$(blue_bold "done")"
+}
+
+create_webadmin_api_key() {
+	require_variables "project"
+
+	echo -en "$(blue_bold "Creating webadmin api key... ")"
+	result="$(query "select customerid from adm_customers where cccid = '$project' limit 1")"
+	customer_id="$(check_field "$result" "customerid")"
+	$(query "insert into api_accounts values (NULL, '$customer_id', '${project,,}', '$project', MD5('$customer_id${project,,}'))")
+	result="$(query "select AuthToken from api_accounts where InteractivProject = '$project'")"
+	webadmin_api_key="$(check_field "$result" "AuthToken")"
+	echo -e "$(green_bold "$webadmin_api_key")"
+}
+
+set_api_server() {
+	require_variables "whitelabel" "project" "webadmin_api_key"
+
+	echo -e "$(blue_bold "Importing WebAdmin API Key to API server... ")"
+	ask_param "api_host" "API Server host" "vs-ics-prd-iap-fr-501"
+	ask_param "api_auth_db_name" "API Auth DB name" "ivauthdb"
+	ask_param "api_auth_db_user" "API Auth DB username" "$webadmin_db_user"
+	ask_password "api_auth_db_pass" "API Auth DB password"
+	remote_command "$api_host" "$(cat <<- EOF
+		echo "\"$whitelabel\";\"$project\";\"$webadmin_api_key\"" > /home/connectics/webadmin_keys.csv
+		sideload-apikeys /home/connectics/webadmin_keys.csv > /home/connectics/webadmin_keys.sql
+		mysql -u $api_auth_db_user -p$api_auth_db_pass -D $api_auth_db_name < /home/connectics/webadmin_keys.sql
+	EOF
+	)"
+	echo -e "$(blue_bold "done")"
+}
+
+stop_cccproxy() {
+	require_variables "webadmin_host" "project"
+
+	echo -e "$(blue_bold "Stoping CCCProxy... ")"
+	remote_root_command "$webadmin_host" "$(cat <<- EOF
+		cd /opt/data/apache2_htdocs/plexid.live/cccproxy
+		./cccPROXY "$project" stop
+		line=\\\$(grep -nr "^name=$project\\\$" conf/projects.conf | awk -F':' '{print $1}')
+		sed -i \\\$((line - 2))\\\$((line + 4))'s/^/;/' conf/projects.conf
+		find . -name "*$project*" -type f -exec rm -fv {} \;
+		find . -name "*$project*" -type d -exec rm -rfv {} \;
+	EOF
+	)"
+	echo -e "$(red_bold "Veuillez lancer le consistent_explorer du projet disponible sur le portail Interact-IV. Vérifier qu'il n'y a plus d'agents et de superviseurs connectés. Si des agents et des superviseurs sont toujours connectés (ou unplug), il faut les killer sur le serveur CCC. Utiliser la procédure https://wiki-ope.hostics.fr/index.php/Kill_d%27une_session_agent_bloqu%C3%A9e")"
+	pause
+	echo -e "$(blue_bold "done")"
+}
+
+upgrade_dispatch() {
+	require_variables "ccc_host" "project"
+
+	echo -e "$(blue_bold "Upgrading dispatch process... ")"
+	remote_root_command "$ccc_host" "$(cat <<- EOF
+		pid=\\\"\\\$(iv-banners-migrate mcanal "$project" | tail -1 | awk -F' ' '{print $2}')\\\"
+		echo "Killing dispatch process \\\$pid to enable new dispatch."
+		kill \\\$pid
+		echo "Sleeping 3 seconds before agressive kill..."
+		sleep 3
+		kill -9 \\\$pid
+		echo "Sleeping 1 second before process status check..."
+		sleep 1
+		ps -ef | grep "dispatch" | grep "$project"
+	EOF
+	)"
+	pause
+	echo -e "$(blue_bold "done")"
+}
+
+set_middleware_server() {
+	require_variables "web_node" "whitelabel" "project"
+
+	echo -e "$(blue_bold "Setting middleware server... ")"
+	ask_param "middleware_host" "Middleware host" "vs-ics-prd-imi-fr-501"
+	ask_param "config_api_host" "Config API host" "https://api-$web_node.interactivmanager.net"
+	remote_root_command "$middleware_host" "$(cat <<- EOF
+		echo \\\"
+		[$project]
+		configuration_api_project = ${project,,}
+		configuration_api_token = $config_api_key
+		configuration_api_host = $config_api_host
+		vocal_host = $ccc_host\\\" >> /etc/interact-iv/middleware.conf.d/$whitelabel.ini
+		echo "Displaying last 10 lines of /etc/interact-iv/middleware.conf.d/$whitelabel.ini for confirmation."
+		tail -10 /etc/interact-iv/middleware.conf.d/$whitelabel.ini
+		read -n1 -r -p "Press any key to proceed with service iv-middleware-server reload command. Then press ctrl-c to interrupt the tailf command as soon as reload command has been successful" key
+		service iv-middleware-server reload && tail -100f /var/log/interact-iv/iv-middleware-server.log
+	EOF
+	)"
+	echo -e "$(blue_bold "done")"
+}
+
+import_records() {
+	require_variables "webadmin_host" "webadmin_db_name" "webadmin_db_user" "webadmin_db_pass" "project"
+
+	set_database "$webadmin_host" "$webadmin_db_name" "$webadmin_db_user" "$webadmin_db_pass"
+	echo -e "$(blue_bold "Importing records... ")"
+	ask_param "portal_host" "Web Portal host" "svc-ics-prd-web-fr-505"
+	echo -n "Retrieving starting date... "
+	result="$(query "select date(dtecreated) as result from records_callcontact where user=(select distinct customerid from adm_customers where cccid='$project') order by dtecreated asc limit 1")"
+	date_start="$(check_field "$result" "result")"
+	echo "$date_start"
+
+	ask_param "api_host" "API Server host" "vs-ics-prd-iap-fr-501"
+	cmd="$(cat <<- EOF
+		records_log_file=\"$(date +"%Y-%m-%d")-$whitelabel-$project-import-records.log\"
+		screen -AdmS \"\\\$records_log_file\" iv-import-records -w \"$whitelabel\" -p \"$project\" --webadmin-host \"$webadmin_host\" --webadmin-db \"$webadmin_db_name\" --webadmin-user \"$webadmin_db_user\" --webadmin-password \"$webadmin_db_pass\" --portal-host \"$portal_host\" -s \"$date_start\" -e \"$(date +"%Y-%m-%d")\"
+		echo \"Command iv-import-records launched in background. Please check the results later in $api_host:\\\$records_log_file.\"
+	EOF
+	)"
+	remote_root_command "$api_host" "$cmd"
+	echo -e "$(blue_bold "done")"
+}
+
+if [[ $0 =~ iv-upgrade-mcanal ]]; then
+	while getopts "hc:w:d:u:k:f:" opt; do
+		case "$opt" in
+			h)
+				show_help
+				exit 0
+				;;
+
+			c)
+				ccc_host="$OPTARG"
+				;;
+
+			w)
+				webadmin_host="$OPTARG"
+				;;
+
+			d)
+				webadmin_db_name="$OPTARG"
+				;;
+
+			u)
+				webadmin_db_user="$OPTARG"
+				;;
+
+			k)
+				api_key="$OPTARG"
+				;;
+
+			f)
+				source "$OPTARG" >/dev/null 2>&1 \
+				|| (echo "Couldn't find $OPTARG. Exiting." && exit 2)
+				;;
+
+			'?')
+				show_help >&2
+				exit 1
+				;;
+		esac
+	done
+
+	whitelabel="${@:$OPTIND:1}"
+	project="${@:$OPTIND+1:1}"
+
+	[[ "$whitelabel" == "" ]] && die "The WHITELABEL argument is required"
+	[[ "$project" == "" ]] && die "The PROJECT argument is required"
+	ask_param "ccc_host" "Project's ccc hostname" "127.0.0.1"
+	ask_param "webadmin_host" "Project's webadmin hostname" "127.0.0.1"
+	ask_param "webadmin_db_name" "Webadmin's db name" "w${webadmin_host:15:2}${webadmin_host:18:3}interactivnetadmin"
+	web_node="${webadmin_db_name:1:${#webadmin_db_name} - 19}"
+	ask_param "webadmin_db_user" "Webadmin's db user" "interactiv"
+	ask_password "webadmin_db_pass" "Webadmin's db password"
+	ask_param "config_api_key" "Project's configuration api key" "1234567890abcdef"
+
+	check_mcanal_right
+	assert_project_is_callcontact
+
+	check_console_status
+	set_live_console_step=$?
+
+	check_live_records
+	import_records_step=$?
+
+	check_webadmin_api
+
+	migrate_callcontact
+	add_mcanal_right
+
+	set_live_banner
+	set_live_supervisor
+
+	if [ $set_live_console_step -eq 0 ]; then
+		set_live_console
+	fi
+
+	if [[ "$webadmin_api_key" == "" ]]; then
+		create_webadmin_api_key
+	fi
+
+	set_api_server
+
+	stop_cccproxy
+	upgrade_dispatch
+
+	set_middleware_server
+
+	if [ $import_records_step -eq 0 ]; then
+		import_records
+	fi
+fi

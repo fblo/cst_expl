@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# This file is part of Interact-IV's IV2US Tools.
+# Interact-IV.com (c) 2014
+#
+# Contact: softeam@interact-iv.com
+# Authors:
+#    - JTAG <jtag@interact-iv.com>
+#    - SLAU <slau@interact-iv.com>
+
+from __future__ import division, print_function
+
+import argparse
+import sys
+
+from twisted.internet import defer, reactor
+from twisted.python import log
+
+from ivsync.apiclients import ConfigApiClient
+from ivsync.checks import verify_whitelabels
+from ivsync.transaction import Transaction
+from ivsync import utils
+from ivsync.utils import handle_error
+from ivsync.webadminclient import WebAdminClient
+
+DEFAULT_API_HOST = 'vs-ics-prd-iap-fr-901-50.hostics.fr'
+DEFAULT_PORTAL_HOST = 'vs-ics-prd-web-fr-505.hostics.fr'
+DEFAULT_PORTAL_DB_NAME = 'interactivportal'
+DEFAULT_SQL_USER = 'interactiv'
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Synchronize IV2US 2.1 projects into the IV2US 2.2 API "
+        "server.")
+
+    parser.add_argument(
+        '-q', '--quiet',
+        help="Quiet mode, apply changes without prompt.",
+        default=False, action='store_true')
+    parser.add_argument(
+        '--calendarsapi',
+        help="Migrate CalendarsAPI. (one time only!)",
+        default=False, action='store_true')
+    parser.add_argument(
+        '--specialdaysapi',
+        help="Migrate SpecialDaysAPI. (one time only, after CalendarsAPI!)",
+        default=False, action='store_true')
+
+    parser.add_argument(
+        '--soundfilesfoldersapi',
+        help="Migrate SoundFilesFolders. (one time only!)",
+        default=False, action='store_true')
+    parser.add_argument(
+        '--soundfilesapi',
+        help="Migrate SoundFilesAPI. (one time only, after SoundFilesFolders!)",
+        default=False, action='store_true')
+
+    parser.add_argument(
+        '--apionly',
+        help="Don't migrate scenario objects.",
+        default=False, action='store_true'
+    )
+
+    parser.add_argument(
+        '-p', '--project',
+        help="project name to which the migration should be limited. "
+        "This option requires the --whitelabel option to be provided.")
+    parser.add_argument(
+        '-w', '--whitelabel', required=True,
+        help="whitelabel name to which the synchronization should be done.")
+
+    parser.add_argument(
+        '--api-host',
+        help="hostname or address of the API server. Default value: %s" %
+        DEFAULT_API_HOST,
+        default=DEFAULT_API_HOST)
+    parser.add_argument(
+        '--api-port', type=int,
+        help="port on which the API is listening.",
+        default=443)
+    parser.add_argument(
+        '--api-no-ssl', action='store_true',
+        help="deactivate SSL. Useful if port != 443.")
+    parser.add_argument(
+        '-k', '--api-key', required=True,
+        help="overlord API credentials.")
+
+    parser.add_argument(
+        '--portal-host',
+        help="hostname or address of the WebAdmin Portal host. Default "
+        "value: %s" % DEFAULT_PORTAL_HOST,
+        default=DEFAULT_PORTAL_HOST)
+    parser.add_argument(
+        '--portal-db',
+        help="database name of the WebAdmin Portal. Default value: %s" %
+        DEFAULT_PORTAL_DB_NAME,
+        default=DEFAULT_PORTAL_DB_NAME)
+    parser.add_argument(
+        '--portal-user',
+        help="username of the WebAdmin Portal database. Default value: %s" %
+        DEFAULT_SQL_USER,
+        default=DEFAULT_SQL_USER)
+    parser.add_argument(
+        '--portal-password', required=True,
+        help="password of the WebAdmin Portal database.")
+
+    parser.add_argument(
+        '--webadmin-host', required=True,
+        help="hostname or address of the WebAdmin host.")
+    parser.add_argument(
+        '--webadmin-db', required=True,
+        help="database name of WebAdmin.")
+    parser.add_argument(
+        '--webadmin-user',
+        help="username of the WebAdmin database. Default value: %s" %
+        DEFAULT_SQL_USER,
+        default=DEFAULT_SQL_USER)
+    parser.add_argument(
+        '--webadmin-password', required=True,
+        help="password of the WebAdmin database.")
+
+    args = parser.parse_args()
+
+    if args.project and not args.whitelabel:
+        parser.error("--project requires --whitelabel.")
+
+    return args
+
+
+def launch_synchronization(_, webadmin_client, configapi_client, args):
+    log.msg("Launching synchronization:", vars(args))
+    transaction = Transaction(configapi_client, webadmin_client)
+
+    d = webadmin_client.get_whitelabels(args.whitelabel)
+    d.addCallbacks(
+        verify_whitelabels, handle_error,
+        (configapi_client, transaction, args))
+    d.addCallbacks(transaction.print_results, handle_error,
+                   callbackArgs=[args.quiet, args.calendarsapi,
+                                 args.soundfilesfoldersapi, args.apionly])
+
+
+def main(args):
+    log.startLogging(sys.stdout)
+    log.msg("IV2US 2.2 synchronization script starting up.")
+
+    webadmin_client = WebAdminClient(args)
+    configapi_client = ConfigApiClient(args)
+
+    deferreds = [
+        webadmin_client.ready_deferred,
+        configapi_client.ready_deferred
+    ]
+
+    when_ready = defer.gatherResults(deferreds)
+    when_ready.addCallbacks(
+        launch_synchronization, handle_error,
+        (webadmin_client, configapi_client, args))
+
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    main(args)
+    reactor.run()  # pylint: disable=E1101
+    sys.exit(utils.RETURN_CODE)

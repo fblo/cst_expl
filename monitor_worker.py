@@ -16,7 +16,6 @@ sys.path.insert(0, "/home/fblo/Documents/repos/iv-cccp/ivcommons/src")
 DEFAULT_IP = "10.199.30.67"
 DISPATCH_PORT = 20103
 DATA_FILE = "/tmp/cccp_monitoring.json"
-CALL_HISTORY_FILE = "/tmp/cccp_call_history.json"
 UPDATE_INTERVAL = 10
 TEST_SCRIPT = "/home/fblo/Documents/repos/iv-cccp/test_dispatch_json.py"
 
@@ -26,97 +25,10 @@ data = {
     "last_update": None,
     "users": [],
     "queues": [],
-    "calls": {"incoming": 0, "outgoing": 0, "active": 0},
-    "call_history": [],
+    "calls": {"incoming": [], "outgoing": [], "active": 0, "history": []},
     "stats": {"total_users": 0, "supervisors": 0, "agents": 0, "logged_in": 0},
     "errors": [],
 }
-
-
-# Load persisted call history
-def load_call_history():
-    try:
-        with open(CALL_HISTORY_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return []
-
-
-def save_call_history(history):
-    try:
-        with open(CALL_HISTORY_FILE, "w") as f:
-            json.dump(history, f, indent=2)
-    except Exception as e:
-        print(f"Erreur sauvegarde historique: {e}")
-
-
-def format_duration(seconds):
-    """Formate une durée en secondes vers un format lisible"""
-    if seconds < 0:
-        return "-"
-    elif seconds < 60:
-        return f"{seconds}s"
-    elif seconds < 3600:
-        minutes = seconds // 60
-        secs = seconds % 60
-        return f"{minutes}m{secs}s"
-    else:
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
-        return f"{hours}h{minutes}m"
-
-
-def calculate_durations(task):
-    """Calcule les durées d'un appel à partir des dates"""
-    start_date = task.get("start_date", "")
-    end_date = task.get("end_date", "")
-    stop_waiting_date = task.get("stop_waiting_date", "")
-    management_date = task.get("management_date", "")
-
-    waiting_duration = 0
-    managing_duration = 0
-    total_duration = 0
-
-    try:
-        if start_date and start_date != "None":
-            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-
-            if end_date and end_date != "None":
-                end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-                total_duration = int((end_dt - start_dt).total_seconds())
-
-            if stop_waiting_date and stop_waiting_date != "None":
-                waiting_dt = datetime.fromisoformat(
-                    stop_waiting_date.replace("Z", "+00:00")
-                )
-                waiting_duration = int((waiting_dt - start_dt).total_seconds())
-
-            if management_date and management_date != "None":
-                manage_dt = datetime.fromisoformat(
-                    management_date.replace("Z", "+00:00")
-                )
-                managing_duration = (
-                    int(
-                        (end_dt or datetime.now(timezone.utc)) - manage_dt
-                    ).total_seconds()
-                    if end_date
-                    else 0
-                )
-                # Si on a la date de fin, recalculer précisément
-                if end_date and end_date != "None" and management_date != "None":
-                    manage_dt = datetime.fromisoformat(
-                        management_date.replace("Z", "+00:00")
-                    )
-                    end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-                    managing_duration = int((end_dt - manage_dt).total_seconds())
-    except Exception as e:
-        print(f"Erreur calcul durées: {e}")
-
-    return {
-        "waiting_duration": format_duration(waiting_duration),
-        "managing_duration": format_duration(managing_duration),
-        "total_duration": format_duration(total_duration),
-    }
 
 
 def write_data():
@@ -134,119 +46,46 @@ def log_error(message):
         data["errors"] = data["errors"][:50]
 
 
-demo_users = [
-    {
-        "id": 6,
-        "login": "consistent",
-        "name": "consistent",
-        "state": "supervisor unplug",
-        "profile": "Superviseur_default",
-        "logged_in": True,
-        "type": "supervisor",
-    },
-    {
-        "id": 15,
-        "login": "agt_mpu_preprod",
-        "name": "agt_mpu_preprod",
-        "state": "unplug",
-        "profile": "Profile_Test",
-        "logged_in": True,
-        "type": "agent",
-    },
-    {
-        "id": 100,
-        "login": "fblo",
-        "name": "FBLO",
-        "state": "supervisor plugged",
-        "profile": "Superviseur_default",
-        "logged_in": True,
-        "type": "supervisor",
-    },
-]
-
-demo_queues = [
-    {
-        "id": 3,
-        "name": "test_queue_vocal1",
-        "display_name": "Test Queue Vocal 1",
-        "logged": 0,
-        "working": 0,
-        "waiting": 0,
-    },
-    {
-        "id": 4,
-        "name": "queue_2",
-        "display_name": "Queue 2",
-        "logged": 0,
-        "working": 0,
-        "waiting": 0,
-    },
-    {
-        "id": 5,
-        "name": "agt_mpu_preprod",
-        "display_name": "Agent MPU Preprod",
-        "logged": 1,
-        "working": 0,
-        "waiting": 0,
-    },
-]
-
-
 def fetch_cccp_data():
-    """Recupere les donnees CCCP via subprocess"""
+    """Recupere les donnees depuis le script de test"""
     try:
         result = subprocess.run(
             [sys.executable, TEST_SCRIPT, DEFAULT_IP, str(DISPATCH_PORT)],
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=15,
         )
-
-        if result.returncode != 0:
-            log_error(f"Script erreur: {result.stderr}")
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        else:
+            log_error(f"Test script error: {result.stderr}")
             return None
-
-        output = result.stdout.strip()
-        if not output:
-            log_error("Pas de sortie du script")
-            return None
-
-        return json.loads(output)
-
     except subprocess.TimeoutExpired:
-        log_error("Timeout du script CCCP")
-        return None
-    except json.JSONDecodeError as e:
-        log_error(f"JSON decode error: {e}")
+        log_error("Test script timeout")
         return None
     except Exception as e:
-        log_error(f"Erreur subprocess: {e}")
+        log_error(f"Erreur fetching: {e}")
         return None
 
 
 def process_cccp_data(cccp_data):
-    """Traite les donnees recues du CCCP"""
-    if cccp_data is None or cccp_data.get("error"):
-        return None, None, []
-
+    """Traite les donnees brutes du CCCP pour le dashboard"""
     users = []
-    call_history = []
-
-    # Traiter TOUS les utilisateurs en une seule passe
     cccp_users = cccp_data.get("users", [])
-    print(f"DEBUG: Processing {len(cccp_users)} CCCP users")
 
     for u in cccp_users:
         login = u.get("login", "")
+
+        # Skip utilisateur consistent
+        if login == "consistent":
+            continue
+
         profile = u.get("sessions.last.session.profile_name", "")
         logged_str = u.get("sessions.last.session.logged", "False")
         logged = str(logged_str).lower() == "true"
 
-        print(f"DEBUG: {login} - logged={logged_str} -> {logged}")
-
         # Garder tous les utilisateurs connectés
         if not logged:
-            print(f"DEBUG: Skipping {login} - not logged")
             continue
 
         phone = u.get("sessions.last.session.phone_uri", "")
@@ -263,14 +102,24 @@ def process_cccp_data(cccp_data):
         user_type = "agent"
         state = "plugged"
 
-        if profile == "Superviseur_default":
+        last_state_name = u.get("last_state_name", "").lower()
+        last_state_display_name = u.get("last_state_display_name", "").lower()
+
+        if (
+            (profile and "supervisor" in profile.lower())
+            or login.startswith("supervisor")
+            or "supervision" in last_state_name
+            or "supervision" in last_state_display_name
+        ):
             user_type = "supervisor"
             if "interface" in mode.lower():
                 state = "supervisor interface"
+            elif "unplug" in mode.lower():
+                state = "supervisor unplug"
             else:
                 state = "supervisor plugged"
         else:
-            last_state = u.get("last_state_name", "").lower()
+            last_state = u.get("last_state_display_name", "").lower()
 
             if "sortant" in last_state or "outbound" in last_state:
                 state = "outbound"
@@ -283,7 +132,6 @@ def process_cccp_data(cccp_data):
             else:
                 state = "plugged"
 
-        # Calculer la durée de connexion
         login_duration_seconds = 0
         if login_date and login_date != "None" and login_date != "":
             try:
@@ -306,8 +154,6 @@ def process_cccp_data(cccp_data):
                 return f"{hours}h{minutes}m"
 
         login_duration_formatted = format_duration(login_duration_seconds)
-
-        print(f"DEBUG: Adding {login} ({user_type}) to users list")
 
         users.append(
             {
@@ -332,105 +178,6 @@ def process_cccp_data(cccp_data):
             }
         )
 
-    print(f"DEBUG: Returning {len(users)} users from process_cccp_data")
-
-    # Load persisted call history
-    persisted_history = load_call_history()
-    existing_task_ids = {call.get("task_id") for call in persisted_history}
-
-    # Process new calls from CCCP
-    new_calls = []
-    for call in cccp_data.get("call_history", []):
-        task_id = call.get("task_id", "")
-
-        # Only process new calls (not in persisted history)
-        if task_id and task_id not in existing_task_ids:
-            # Get pre-calculated durations from the dispatch data
-            waiting_duration = call.get("waiting_duration", "0s")
-            managing_duration = call.get("managing_duration", "0s")
-            post_mgmt_duration = call.get("post_management_duration", "0s")
-            total_duration = call.get("total_duration", "0s")
-
-            # Parse start date for formatting with LOCAL timezone
-            start_date_utc = call.get("start_date", "")
-            start_date_local = ""
-            start_time_local = ""
-
-            if start_date_utc and start_date_utc != "None":
-                try:
-                    # Parse as UTC
-                    if start_date_utc.endswith("Z"):
-                        start_date_utc = start_date_utc[:-1] + "+00:00"
-                    dt_utc = datetime.fromisoformat(start_date_utc)
-
-                    # Convert to local timezone
-                    from datetime import timezone
-
-                    dt_local = dt_utc.astimezone()
-
-                    start_date_local = dt_local.strftime("%d/%m/%Y")
-                    start_time_local = dt_local.strftime("%H:%M:%S")
-                except Exception as e:
-                    print(f"DEBUG: Error parsing date {start_date_utc}: {e}")
-                    # Fallback to just extracting time from string
-                    if "T" in start_date_utc:
-                        start_time_local = (
-                            start_date_utc.split("T")[1].split("+")[0].split("Z")[0]
-                        )
-
-            new_calls.append(
-                {
-                    "task_id": task_id,
-                    "queue_type": call.get("queue_type", ""),
-                    "queue_display_name": call.get("queue_display_name", ""),
-                    "start_date_utc": start_date_utc,
-                    "start_date": start_date_local,
-                    "start_time": start_time_local,
-                    "waiting_duration": waiting_duration,
-                    "managing_duration": managing_duration,
-                    "post_management_duration": post_mgmt_duration,
-                    "total_duration": total_duration,
-                    "manager_login": call.get("manager_login", ""),
-                    "manager_profile": call.get("manager_profile", ""),
-                    "caller": call.get("caller", ""),
-                    "callee": call.get("callee", ""),
-                }
-            )
-
-    # Add new calls to persisted history
-    call_history = new_calls + persisted_history
-
-    # Keep only last 500 calls
-    call_history = call_history[:500]
-
-    # Save updated history
-    save_call_history(call_history)
-
-    # Format call history for display (last 100)
-    display_history = []
-    for call in call_history[:100]:
-        # Use pre-formatted local dates
-        date_str = call.get("start_date", "")
-        time_str = call.get("start_time", "")
-
-        display_history.append(
-            {
-                "task_id": call.get("task_id", ""),
-                "queue_type": call.get("queue_type", ""),
-                "queue_display_name": call.get("queue_display_name", ""),
-                "start_date": date_str,
-                "start_time": time_str,
-                "waiting_duration": call.get("waiting_duration", ""),
-                "managing_duration": call.get("managing_duration", ""),
-                "post_management_duration": call.get("post_management_duration", ""),
-                "total_duration": call.get("total_duration", ""),
-                "manager_login": call.get("manager_login", ""),
-                "manager_profile": call.get("manager_profile", ""),
-                "caller": call.get("caller", ""),
-                "callee": call.get("callee", ""),
-            }
-        )
-
     queues = []
     for q in cccp_data.get("queues", []):
         name = q.get("name", "")
@@ -449,7 +196,128 @@ def process_cccp_data(cccp_data):
             }
         )
 
-    return users, queues, call_history
+    return users, queues
+
+
+def process_calls_data(cccp_data, users=None, existing_history=None):
+    """Traite les donnees d'appels recues du CCCP"""
+    incoming_calls = []
+    outgoing_calls = []
+    history_calls = list(existing_history) if existing_history else []
+    active_count = 0
+
+    def calculate_duration(start_date, end_date=None):
+        if not start_date or start_date in ("", "None"):
+            return ""
+
+        try:
+            start_dt = datetime.fromisoformat(
+                start_date.replace("/", "-").replace(" ", "T")
+            )
+            end_dt = (
+                datetime.fromisoformat(end_date.replace("/", "-").replace(" ", "T"))
+                if end_date and end_date not in ("", "None")
+                else datetime.now(timezone.utc)
+            )
+            delta = end_dt - start_dt
+            seconds = int(delta.total_seconds())
+            if seconds < 60:
+                return f"{seconds}s"
+            elif seconds < 3600:
+                return f"{seconds // 60}m{seconds % 60}s"
+            else:
+                return f"{seconds // 3600}h{(seconds % 3600) // 60}m"
+        except:
+            return ""
+
+    def format_call_data(call, call_type="inbound"):
+        """Formate les donnees d'un appel"""
+        terminate_date = call.get("terminate_date", "")
+        local_number = call.get(
+            "attributes.local_number.value", call.get("user.name", "")
+        )
+        remote_number = call.get(
+            "attributes.remote_number.value",
+            call.get("last_outbound_call_target.value", ""),
+        )
+        user_login = call.get("user.login", call.get("manager_session.user.login", ""))
+
+        if local_number and local_number.startswith("tel:"):
+            local_number = local_number[4:]
+        if remote_number and remote_number.startswith("tel:"):
+            remote_number = remote_number[4:]
+
+        start_date = call.get(
+            "start_date",
+            call.get(
+                "management_effective_date",
+                call.get("last_outbound_call_contact_start.value", ""),
+            ),
+        )
+        duration = calculate_duration(start_date, terminate_date)
+
+        return {
+            "id": call.get(
+                "session_id", call.get("id", call.get("outbound_call_id.value", ""))
+            ),
+            "type": call_type,
+            "local_number": local_number,
+            "remote_number": remote_number,
+            "user_login": user_login,
+            "queue_name": call.get("queue_name", ""),
+            "create_date": call.get(
+                "create_date", call.get("last_outbound_call_start.value", "")
+            ),
+            "start_date": start_date,
+            "terminate_date": terminate_date,
+            "duration": duration,
+        }
+
+    # Traiter les appels entrants (communication sessions actives)
+    for call in cccp_data.get("calls_inbound", []):
+        terminate_date = call.get("terminate_date", "")
+
+        if terminate_date and terminate_date not in ("", "None"):
+            history_calls.append(format_call_data(call, "inbound"))
+        else:
+            active_count += 1
+            incoming_calls.append(format_call_data(call, "inbound"))
+
+    # Traiter les appels sortants actifs (outbound communication sessions)
+    for call in cccp_data.get("calls_outbound", []):
+        terminate_date = call.get("terminate_date", "")
+
+        if terminate_date and terminate_date not in ("", "None"):
+            history_calls.append(format_call_data(call, "outbound"))
+        else:
+            active_count += 1
+            outgoing_calls.append(format_call_data(call, "outbound"))
+
+    # Traiter les appels de l'historique (terminés aujourd'hui)
+    for call in cccp_data.get("calls_history", []):
+        session_type = call.get("session_type", "")
+        is_outbound = str(session_type) == "3"
+        call_type = "outbound" if is_outbound else "inbound"
+
+        call_id = call.get("session_id", "")
+        if not any(h["id"] == call_id for h in history_calls):
+            history_calls.append(format_call_data(call, call_type))
+
+    # Pas de fallback - on ne montre pas les états comme des appels
+    # Les vrais appels doivent venir des vues CCCP
+
+    history_calls.sort(
+        key=lambda x: x.get("terminate_date", "") or x.get("create_date", ""),
+        reverse=True,
+    )
+    history_calls = history_calls[:100]
+
+    return {
+        "incoming": incoming_calls,
+        "outgoing": outgoing_calls,
+        "active": active_count,
+        "history": history_calls,
+    }
 
 
 def monitoring_loop():
@@ -461,17 +329,36 @@ def monitoring_loop():
 
         try:
             cccp_data = fetch_cccp_data()
-            users, queues, call_history = process_cccp_data(cccp_data)
+            users, queues = process_cccp_data(cccp_data)
 
             if users is None:
                 data["connected"] = False
-                data["users"] = demo_users.copy()
-                data["queues"] = demo_queues.copy()
+                data["users"] = []
+                data["queues"] = []
+                data["calls"] = {
+                    "incoming": [],
+                    "outgoing": [],
+                    "active": 0,
+                    "history": [],
+                }
             else:
                 data["connected"] = True
                 data["users"] = users
                 data["queues"] = queues
-                data["call_history"] = call_history
+
+                # Traiter les donnees d'appels
+                if cccp_data:
+                    calls_data = process_calls_data(
+                        cccp_data, users, data["calls"].get("history", [])
+                    )
+                    data["calls"] = calls_data
+                else:
+                    data["calls"] = {
+                        "incoming": [],
+                        "outgoing": [],
+                        "active": 0,
+                        "history": [],
+                    }
 
             data["last_update"] = datetime.now().isoformat()
 
@@ -497,7 +384,7 @@ def monitoring_loop():
                     f"[{datetime.now().strftime('%H:%M:%S')}] {'Connecte' if connected else 'Deconnecte'} au dispatch"
                 )
                 print(
-                    f"  Utilisateurs: {len(data['users'])}, Queues: {len(data['queues'])}, Appels: {len(data['call_history'])}"
+                    f"  Utilisateurs: {len(data['users'])}, Queues: {len(data['queues'])}"
                 )
 
         except Exception as e:
@@ -507,10 +394,10 @@ def monitoring_loop():
 
 
 def init_data():
-    data["users"] = demo_users.copy()
-    data["queues"] = demo_queues.copy()
-    data["call_history"] = []
+    data["users"] = []
+    data["queues"] = []
     data["events"] = []
+    data["calls"] = {"incoming": [], "outgoing": [], "active": 0, "history": []}
     data["last_update"] = datetime.now().isoformat()
     write_data()
     print(

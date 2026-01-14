@@ -1,0 +1,36 @@
+#!/bin/bash
+# Version: 1.0
+# Auteur: GETOUMI
+USAGE='Usage: iv-del-cdr PROJET [HOSTNAME]
+	Retire un process CDR au projet PROJET sur le serveur consistent HOSTNAME (localhost par défaut).
+	'
+if [[ "$1" == "-h" ]]
+then
+	echo -e "$USAGE"
+	exit 1
+fi
+
+if [ $# -ne 2 ] && [ $# -ne 1 ]; then
+	echo -e "$USAGE"
+	exit 2
+fi
+
+if [ $# -eq 1 ]; then
+	serveur=localhost
+else
+	serveur=$2
+fi
+projet=$1
+
+function ccc_projects { 
+	ccenter_update -login admin -password admin -server $serveur 20000 -children /db/projects                 
+}
+
+if [[ $(ccc_projects | grep "$projet|") == "" ]]; then
+	echo "ERREUR : Projet $projet non trouvé sur le serveur $serveur"
+	exit 3
+fi
+
+cdr_path=/db/projects/$projet/processes/consistent_1/Head_Main/Head_$projet/Cdr
+ccenter_update -login admin -password admin -server $serveur 20000 -rmnode $cdr_path 2> /dev/null #Reste silencieux si Cdr n'existe pas  
+

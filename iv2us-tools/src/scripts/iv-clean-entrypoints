@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import MySQLdb
+import os
+
+from argparse import ArgumentParser
+from collections import defaultdict
+from subprocess import check_output
+
+argparser = ArgumentParser(
+    description="Delete obsolete entrypoints from Voip Configuration.")
+argparser.add_argument('-v', '--vocal-host', required=True,
+                       help="Target vocal host.")
+argparser.add_argument('-p', '--portal-host', required=True,
+                       help="Portal host.")
+args = argparser.parse_args()
+
+
+class VocalNode(object):
+    def __init__(self, host):
+        self.host = host
+
+    def ccenter_update(self, *args):
+        return check_output([
+            "ccenter_update", "-server", self.host, "20000",
+            "-login", "admin", "-password", "admin"
+        ] + list(args))
+
+    def ccc_ls(self, directory, exclude=[]):
+        return [
+            row for row in
+            self.ccenter_update("-children", directory).split("|\n")[:-1]
+            if row not in exclude
+        ]
+
+    def ccc_get(self, path, local_path):
+        with open(local_path, "w+") as fd:
+            fd.write(self.ccenter_update("-content", path))
+
+    def ccc_put(self, path, local_path):
+        self.ccenter_update("-create", "-path", path, "-file", local_path)
+
+    def get_projects(self):
+        return self.ccc_ls("/db/projects", exclude=("Main", "Default"))
+
+
+class WebNode(object):
+    def __init__(self, host, node):
+        self.host = host
+        self.node = node
+        self.projects = {}
+
+    def get_projects_entrypoints(self):
+        result = defaultdict(list)
+
+        web_db = MySQLdb.connect(
+            host=self.host,
+            user="interactiv",
+            passwd="ics427!",
+            db="w%sinteractivnetadmin" % self.node
+        )
+
+        entrypoints_cursor = web_db.cursor()
+        entrypoints_cursor.execute(
+            "SELECT `user`, `cccentrypoint` FROM `adm_activation` "
+            "WHERE `user` IN (%s) "
+            "AND `numbertype` IN (\"incall\", \"callback\") "
+            "AND `cccentrypoint` <> \"\""
+            % ", ".join(self.projects.keys())
+        )
+
+        for customer_id, entrypoint in entrypoints_cursor:
+            result[self.projects[str(customer_id)]].append(entrypoint)
+
+        return result
+
+
+class PortalNode(object):
+    def __init__(self, host):
+        self.db = MySQLdb.connect(
+            host=host,
+            user="interactiv",
+            passwd="ics427!",
+            db="interactivportal"
+        )
+
+    def get_projects_entrypoints(self, projects):
+        cursor = self.db.cursor()
+        cursor.execute(
+            "SELECT DISTINCT AC.customerid, AC.cccid, AC.node_id, MW.hostname "
+            "FROM `adm_customers` AS AC "
+            "LEFT OUTER JOIN `interactivdbmaster`.`master_webnodes` AS MW "
+            "  ON MW.webnode = AC.node_id "
+            "WHERE `cccid` IN (\"%s\")" % '", "'.join(projects)
+        )
+
+        entrypoints = {}
+        web_nodes = {}
+
+        for customer_id, project, web_node, web_host in cursor:
+            if web_node not in web_nodes:
+                web_nodes[web_node] = WebNode(web_host, web_node)
+
+            web_nodes[web_node].projects[str(customer_id)] = project
+
+        for web_node in web_nodes.values():
+            print(" - web node %s - %s... " %
+                  (web_node.node, str(web_node.projects.values())),
+                  end="")
+            entrypoints.update(web_node.get_projects_entrypoints())
+            print("done")
+
+        return entrypoints
+
+
+vocal_node = VocalNode(args.vocal_host)
+portal_node = PortalNode(args.portal_host)
+
+print("Retrieving projects... ", end="")
+projects = vocal_node.get_projects()
+print("done")
+print("Retrieving entrypoints... ")
+entrypoints = portal_node.get_projects_entrypoints(projects)
+print("done")
+
+voip_path = "/db/projects/Main/Voip.xml"
+old_path = "Voip-%s.old" % args.vocal_host
+new_path = "Voip-%s.new" % args.vocal_host
+
+print("Retrieving Voip configuration... ", end="")
+vocal_node.ccc_get(voip_path, old_path)
+print("done")
+
+with open(old_path, "r") as old_fd:
+    with open(new_path, "w+") as new_fd:
+        print("Filtering obsolete voip entries... ")
+        for line in old_fd:
+            if "<ccenter_voip_entry " in line:
+                project = line.split(' project_name="', 1)[1].split('" ', 1)[0]
+
+                if project not in projects:
+                    print(" - Removed line (project %s): %s" %
+                          (project, line), end="")
+                    continue
+
+                entrypoint = line.split(' value="', 1)[1].split('" ', 1)[0]
+
+                if entrypoint not in entrypoints.get(project, []):
+                    print(" - Removed line (project %s - entrypoint %s): %s" %
+                          (project, entrypoint, line), end="")
+                    continue
+
+            new_fd.write(line)
+
+        print("done")
+
+print("Uploading new Voip configuration... ", end="")
+vocal_node.ccc_put(voip_path, new_path)
+print("done")
+
+print("Cleaning temporary files... ", end="")
+os.remove(new_path)
+print("done")
+
+print("\nBackup Voip configuration: %s" % old_path)

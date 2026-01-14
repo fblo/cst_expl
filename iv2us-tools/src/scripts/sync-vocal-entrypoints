@@ -1,0 +1,267 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import argparse
+import MySQLdb
+import sys
+
+
+DEFAULT_SQL_USER = 'interactiv'
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Import records from webadmin to records api.")
+
+    parser.add_argument(
+        '-p', '--project', required=True,
+        help="project name to which the import should be limited. ")
+    parser.add_argument(
+        '-w', '--whitelabel', required=True,
+        help="whitelabel name to which the import should be limited.")
+
+    parser.add_argument(
+        '--mysql-webadmin-host', required=True,
+        help="hostname or address of the MySQL WebAdmin host.")
+    parser.add_argument(
+        '--mysql-webadmin-db', required=True,
+        help="database name of WebAdmin.")
+    parser.add_argument(
+        '--mysql-webadmin-user',
+        help="username of the WebAdmin database. Default value: %s" %
+        DEFAULT_SQL_USER,
+        default=DEFAULT_SQL_USER)
+    parser.add_argument(
+        '--mysql-webadmin-password',
+        help="password of the WebAdmin database.",
+        required=True)
+
+    parser.add_argument(
+        '--mysql-api-host', required=True,
+        help="hostname or address of the MySQL APIServer host.")
+    parser.add_argument(
+        '--mysql-api-db',
+        help="Database name of APIServer. (ivconfigdb)",
+        default='ivconfigdb')
+    parser.add_argument(
+        '--mysql-api-user',
+        help="username of the APIServer database. Default value: %s" %
+        DEFAULT_SQL_USER,
+        default=DEFAULT_SQL_USER)
+    parser.add_argument(
+        '--mysql-api-password',
+        required=True,
+        help="password of the APIServer database.")
+
+    return parser.parse_args()
+
+
+class MySQLClient(object):
+    def execute_query(self, query):
+        try:
+            cursor = self.db.cursor()
+            cursor.execute(query)
+            return cursor.fetchall()
+        except Exception as e:
+            die(str(e))
+
+
+class WebAdminClient(MySQLClient):
+    def __init__(self, args):
+        self.db = MySQLdb.connect(
+            host=args.mysql_webadmin_host,
+            user=args.mysql_webadmin_user,
+            passwd=args.mysql_webadmin_password,
+            db=args.mysql_webadmin_db,
+        )
+        self.whitelabel = args.whitelabel
+        self.project = args.project
+
+    def get_customer_id(self):
+        query = (
+            "select distinct(customerid) "
+            "from adm_customers "
+            "where cccid = '%s'"
+        ) % (self.project.upper())
+        return self.execute_query(query)[0][0]
+
+    def get_entrypoints(self):
+        customer_id = self.get_customer_id()
+        query = (
+            "select adm_activation.cccentrypoint, "
+            "   adm_activation.numbertype, "
+            "   adm_activation.servicenumber, "
+            "   adm_activation.commentaire, "
+            "   adm_activation.grouptext, "
+            "   adm_activation.id "
+            "from adm_activation "
+            "where adm_activation.numbertype in ('incall', 'webcall', 'callback') "
+            "and adm_activation.user = %s and adm_activation.cccentrypoint != ''"
+        ) % customer_id
+        data = self.execute_query(query)
+        entrypoints = []
+        for row in data:
+            _row = {
+                'cccentrypoint': row[0] if row[0] else '',
+                'numbertype': row[1] if row[1] else '',
+                'servicenumber': row[2].decode('iso-8859-15').encode('utf-8') if row[2] else '',
+                'commentaire': row[3].decode('iso-8859-15').encode('utf-8') if row[3] else '',
+                'grouptext': row[4].decode('iso-8859-15').encode('utf-8') if row[4] else '',
+                'id': row[5]
+            }
+            entrypoints.append(_row)
+        return entrypoints
+
+
+class APIClient(MySQLClient):
+    def __init__(self, args):
+        self.db = MySQLdb.connect(
+            host=args.mysql_api_host,
+            user=args.mysql_api_user,
+            passwd=args.mysql_api_password,
+            db=args.mysql_api_db,
+            charset='utf8', use_unicode=False
+        )
+        self.whitelabel = args.whitelabel
+        self.project = args.project
+        self.result_sync = {
+            'to_delete': [],
+            'to_add': [],
+            'relations': []
+        }
+
+        self.project_ref = self.execute_query("SELECT id FROM Projects WHERE name='%s'" % self.project)[0][0]
+        self.channel_ref = self.execute_query("SELECT id FROM Channels WHERE name='vocal'")[0][0]
+
+    def check_entrypoint(self, data):
+        query = (
+            "select EntryPoints.primary_data, "
+            "   EntryPoints.auxiliary_data, "
+            "   EntryPoints.group, "
+            "   EntryPoints.sub_type, "
+            "   EntryPoints.commentary, "
+            "   EntryPoints.id "
+            "from EntryPoints "
+            "where channel_ref=(select id from Channels where name='vocal') "
+            "   and project_ref=(select id from Projects where name='%s')"
+            "   and EntryPoints.primary_data='%s'"
+        ) % (self.project.upper(), data['cccentrypoint'])
+        _result = self.execute_query(query)
+        if not _result:
+            self.result_sync['to_add'].append(data)
+            return 
+
+        result = []
+        for r in _result:
+            result.append([x if x else '' for x in r])
+
+        for row in result:
+            if data['servicenumber'] != row[1]:
+                print "*/[w_id:%s/api_id:%s] servicenumber mismatch: %s/%s*/" % (data['id'], row[5], data['servicenumber'], row[1])
+                self.result_sync['to_delete'].append(row[5])
+                self.result_sync['to_add'].append(data)
+                break
+
+            if data['grouptext'] != row[2]:
+                print "/*[w_id:%s/api_id:%s] grouptext mismatch: %s/%s*/" % (data['id'], row[5], data['grouptext'], row[2])
+                self.result_sync['to_delete'].append(row[5])
+                self.result_sync['to_add'].append(data)
+                break
+
+            if data['numbertype'] != row[3]:
+                print "/*[w_id:%s/api_id:%s] numbertype mismatch: %s/%s*/" % (data['id'], row[5], data['numbertype'], row[3])
+                self.result_sync['to_delete'].append(row[5])
+                self.result_sync['to_add'].append(data)
+                break
+
+            if data['commentaire'] != row[4]:
+                print "/*[w_id:%s/api_id:%s] commentaire mismatch: %s/%s*/" % (data['id'], row[5], data['commentaire'], row[4])
+                self.result_sync['to_delete'].append(row[5])
+                self.result_sync['to_add'].append(data)
+                break
+
+    def save_rel_scenarios(self, ids):
+        query = (
+            "SELECT EntryPoints.primary_data, rel_entrypoints_scenarios.scenario_ref "
+            "FROM rel_entrypoints_scenarios "
+            "JOIN EntryPoints ON rel_entrypoints_scenarios.entrypoint_ref=EntryPoints.id "
+            "WHERE rel_entrypoints_scenarios.entrypoint_ref IN (%s)" % (",".join([str(_id) for _id in ids]))
+        )
+        results = self.execute_query(query)
+        if results:
+            for r in results:
+                self.result_sync['relations'].append(
+                    "((SELECT id FROM EntryPoints WHERE primary_data='%s' AND project_ref='%s'), %s, %s)" % (r[0], self.project_ref, r[1], self.channel_ref))
+
+    def delete_entrypoints(self, ids):
+        self.save_rel_scenarios(ids)
+
+        query = (
+            "DELETE FROM EntryPoints WHERE id IN (%s)" % (",".join([str(_id) for _id in ids]))
+        )
+        print query + ";"
+
+    def create_entrypoints(self, data):
+        query = (
+            "INSERT INTO EntryPoints (project_ref, channel_ref, primary_data, auxiliary_data, EntryPoints.group, commentary, sub_type) "
+            "VALUES "
+        )
+        query += ",".join([
+            "(%s, %s, '%s', '%s', '%s', '%s', '%s')" % (
+                int(self.project_ref), int(self.channel_ref),
+                d['cccentrypoint'], d['servicenumber'], d['grouptext'], d['commentaire'], d['numbertype']) for d in data]
+        )
+
+        print query + ";"
+        if self.result_sync['relations']:
+            print "/*----*/"
+            query = (
+                "INSERT INTO rel_entrypoints_scenarios (entrypoint_ref, scenario_ref, channel_ref) "
+                "VALUES "
+            )
+            query += ",".join([
+                "%s" % str(a) for a in self.result_sync['relations']
+            ])
+            print query + ";"
+        else:
+            print "/*No relations to create between scenarios and entrypoints*/"
+
+    def get_results(self):
+        return self.result_sync
+
+
+def main(args):
+    wclient = WebAdminClient(args)
+    apiclient = APIClient(args)
+
+    w_entrypoints = wclient.get_entrypoints()
+
+    print "/*Total entrypoints on Webadmin DB: %s*/" % len(w_entrypoints)
+    print "/*----*/"
+
+    for we in w_entrypoints:
+        apiclient.check_entrypoint(we)
+
+    results = apiclient.get_results()
+
+    print "/*----*/"
+    if results['to_delete']:
+        apiclient.delete_entrypoints(results['to_delete'])
+    else:
+        print "/*Nothing to delete.*/"
+
+    print "/*----*/"
+    if results['to_add']:
+        apiclient.create_entrypoints(results['to_add'])
+    else:
+        print "/*Nothing to add.*/"
+
+
+def die(msg):
+    print(msg)
+    sys.exit(1)
+
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    main(args)

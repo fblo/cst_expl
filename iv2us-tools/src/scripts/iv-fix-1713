@@ -1,0 +1,707 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# This file is part of Interact-IV's IV2US Tools.
+# Interact-IV.com (c) 2014
+#
+# Contact: softeam@interact-iv.com
+# Authors:
+#    - JTAG <jtag@interact-iv.com>
+#    - SLAU <slau@interact-iv.com>
+
+from __future__ import print_function
+
+import argparse
+import getpass
+import sys
+
+try:
+    import phpserialize
+except ImportError:
+    print("Please install `phpserialize`.")
+    print()
+    print("\tpip install phpserialize")
+    sys.exit(-1)
+
+from twisted.enterprise import adbapi
+from twisted.internet import defer, reactor, stdio
+from twisted.protocols import basic
+from twisted.python import log
+from twisted.python.failure import NoCurrentExceptionError
+
+
+DEFAULT_PORTAL_HOST = 'vs-ics-prd-web-fr-505.hostics.fr'
+DEFAULT_PORTAL_DB_NAME = 'interactivportal'
+DEFAULT_SQL_USER = 'interactiv'
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description = "Fix webadmin's supervisors desynchronisation.")
+
+    parser.add_argument('-p', '--project',
+        help = "project name to which the migration should be limited. "
+            "This option requires the --whitelabel option to be provided.")
+    parser.add_argument('-w', '--whitelabel',
+        help = "whitelabel name to which the migration should be limited.")
+
+    parser.add_argument('--portal-host',
+        help = "hostname or address of the WebAdmin Portal host. Default "
+            "value: %s" % DEFAULT_PORTAL_HOST,
+        default = DEFAULT_PORTAL_HOST)
+    parser.add_argument('--portal-db',
+        help = "database name of the WebAdmin Portal. Default value: %s" %
+            DEFAULT_PORTAL_DB_NAME,
+        default = DEFAULT_PORTAL_DB_NAME)
+    parser.add_argument('--portal-user',
+        help = "username of the WebAdmin Portal database. Default value: %s" %
+            DEFAULT_SQL_USER,
+        default = DEFAULT_SQL_USER)
+    parser.add_argument('--portal-password', required = True,
+        help = "password of the WebAdmin Portal database.")
+
+    parser.add_argument('--webadmin-host', required = True,
+        help = "hostname or address of the WebAdmin host.")
+    parser.add_argument('--webadmin-db', required = True,
+        help = "database name of WebAdmin.")
+    parser.add_argument('--webadmin-user',
+        help = "username of the WebAdmin database. Default value: %s" %
+            DEFAULT_SQL_USER,
+        default = DEFAULT_SQL_USER)
+    parser.add_argument('--webadmin-password', required = True,
+        help = "password of the WebAdmin database.")
+
+    args = parser.parse_args()
+
+    if args.project and not args.whitelabel:
+        parser.error("--project requires --whitelabel.")
+
+    return args
+
+
+def handle_error(failure):
+    try:
+        log.err()
+    except NoCurrentExceptionError:
+        log.msg(failure)
+    reactor.stop()
+
+
+class BusinessObject(object):
+    def __init__(self, name, client):
+        self.name = name
+        self._client = client
+
+
+class Client(object):
+    def __init__(self, args):
+        self.ready_deferred = defer.Deferred()
+        self.ready_deferred.addCallbacks(self._log_test_success, handle_error)
+
+        self._parse_credentials(args)
+        self._initialise_client()
+        self._test()
+
+    def _parse_credentials(self, args):
+        raise NotImplementedError()
+
+    def _initialise_client(self):
+        raise NotImplementedError()
+
+    def _test(self):
+        raise NotImplementedError()
+
+    def _test_success_msg(self):
+        raise NotImplementedError()
+
+    def _log_test_success(self, _):
+        log.msg(self._test_success_msg())
+
+
+class WebAdminClient(Client):
+    def _parse_credentials(self, args):
+        self._portal_host = args.portal_host
+        self._portal_username = args.portal_user
+        self._portal_password = args.portal_password \
+            or getpass.getpass("Portal DB password: ")
+        self._portal_db_name = args.portal_db
+
+        self._wa_host = args.webadmin_host
+        self._wa_username = args.webadmin_user
+        self._wa_password = args.webadmin_password \
+            or getpass.getpass("WebAdmin DB password: ")
+        self._wa_db_name = args.webadmin_db
+
+    def _initialise_client(self):
+        log.msg("Initialising DB clients.")
+        self.portal_db = adbapi.ConnectionPool("MySQLdb",
+            cp_reconnect = True,
+            host = self._portal_host,
+            db = self._portal_db_name,
+            user = self._portal_username,
+            passwd = self._portal_password)
+
+        self.wa_db = adbapi.ConnectionPool("MySQLdb",
+            cp_reconnect = True,
+            host = self._wa_host,
+            db = self._wa_db_name,
+            user = self._wa_username,
+            passwd = self._wa_password)
+
+    def _test_client(self, client):
+        return client.runQuery('select 1')
+
+    def _test(self):
+        log.msg("Testing DB connectivity.")
+        deferreds = [
+            self._test_client(self.portal_db),
+            self._test_client(self.wa_db)
+        ]
+
+        d = defer.gatherResults(deferreds)
+        d.chainDeferred(self.ready_deferred)
+
+    def _test_success_msg(self):
+        return "Connectivity test to DBs succeeded!"
+
+    def get_whitelabels(self, wl_filter = None):
+        query = ("select distinct(provider_id) as whitelabels "
+            "from adm_customers")
+        args = None
+
+        if wl_filter:
+            query += " where provider_id = %s"
+            args = (wl_filter,)
+
+        query += " order by whitelabels"
+
+        d = self.query_portal(query, args)
+
+        def build_objects(result):
+            return [WebAdminWhitelabel(value[0], self) for value in result]
+
+        d.addCallbacks(build_objects, handle_error)
+
+        return d
+
+    def query_portal(self, query, args = None):
+        if args:
+            printable_query = query % args
+        else:
+            printable_query = query
+
+        log.msg("Portal SQL:", printable_query)
+        return self.portal_db.runQuery(query, args)
+
+    def query_db(self, query, args = None):
+        if args:
+            printable_query = query % args
+        else:
+            printable_query = query
+
+        log.msg("WebAdmin SQL:", printable_query)
+        return self.wa_db.runQuery(query, args)
+
+
+class WebAdminWhitelabel(BusinessObject):
+
+    def __str__(self):
+        return "Whitelabel `%s'" % self.name
+
+    def get_projects(self, filter_project = None):
+        query = ("select distinct(cccid) as projects "
+            "from adm_customers "
+            "where provider_id = %s")
+        args = (self.name,)
+
+        if filter_project:
+            query += " and cccid = %s"
+            args = (self.name, filter_project)
+
+        d = self._client.query_portal(query, args)
+
+        def build_objects(result):
+            return [WebAdminProject(value[0], self._client, self)
+                for value in result]
+        d.addCallbacks(build_objects, handle_error)
+
+        return d
+
+
+class WebAdminProject(BusinessObject):
+    def __init__(self, name, client, whitelabel):
+        super(WebAdminProject, self).__init__(name, client)
+        self._whitelabel = whitelabel
+
+    def __str__(self):
+        return "Project `%s:%s'" % (self._whitelabel.name, self.name)
+
+    def _get_customer_ids(self):
+        d = self._client.query_portal(
+            "select distinct(customerid) from adm_customers "
+            "where provider_id = %s and cccid = %s",
+            (self._whitelabel.name, self.name))
+
+        def cleanup_results(result):
+            result = [value[0] for value in result]
+            return ', '.join(str(x) for x in result)
+        d.addCallbacks(cleanup_results, handle_error)
+
+        return d
+
+    def get_agents(self):
+        log.msg("Getting agents for %s." % (self,))
+        d = self._get_customer_ids()
+
+        def query_db(customer_ids):
+            d = self._client.query_db(
+                "select id, nom, user, configuration, ppid "
+                "from adm_vocal_agents_users "
+                "where `type` = '' and user in (%s) "
+                "order by nom;" % (customer_ids,))
+
+            def build_objects(result):
+                agents = []
+
+                for row in result:
+                    uid, name, cccid, configuration, ppid = row
+
+                    if configuration is not None:
+                        configuration = phpserialize.loads(configuration)
+
+                    a = WebAdminAgent(uid, name, self._client, self,
+                                      cccid, configuration, ppid)
+
+                    agents.append(a)
+
+                return agents
+
+            d.addCallbacks(build_objects, handle_error)
+            return d
+
+        d.addCallbacks(query_db, handle_error)
+        return d
+
+    def get_supervisors(self):
+        log.msg("Getting supervisors for %s." % (self,))
+        d = self._get_customer_ids()
+
+        def query_db(customer_ids):
+            d = self._client.query_db(
+                "select id, nom, user, configuration "
+                "from adm_vocal_supervisors "
+                "where `type` = 'supervisor' and user in (%s) "
+                "order by nom;" % (customer_ids,))
+
+            def build_objects(result):
+                supervisors = []
+
+                for row in result:
+                    uid, name, cccid, configuration = row
+
+                    if configuration is not None:
+                        configuration = phpserialize.loads(configuration)
+
+                    s = WebAdminSupervisor(uid, name, self._client, self,
+                                           cccid, configuration)
+
+                    supervisors.append(s)
+
+                return supervisors
+
+            d.addCallbacks(build_objects, handle_error)
+            return d
+
+        d.addCallbacks(query_db, handle_error)
+        return d
+
+
+class WebAdminSupervisor(BusinessObject):
+    def __init__(self, uid, name, client, project, customer_id, configuration):
+        super(WebAdminSupervisor, self).__init__(name, client)
+        self.uid = uid
+        self.name = name
+        self.configuration = configuration if configuration is not None else {}
+        self._whitelabel = project._whitelabel
+        self._project = project
+        self._customer_id = customer_id
+
+    def __str__(self):
+        return 'Supervisor `%s@%s:%s (%s)`' % (
+               self.name, self._whitelabel.name, self._project.name, self.uid)
+
+    def check_duplicate(self, compared_user):
+        # Always keep newest duplicate
+        if self.uid <= compared_user.uid:
+            return False
+
+        if self.name == compared_user.name:
+            return True
+
+        login = self.configuration.get('login')
+        return login and login == compared_user.configuration.get('login')
+
+    def check_agent(self, transaction):
+        # Only check if agent exists as other checks are made in the agent part
+        query = ("select id "
+                 "from adm_vocal_agents_users "
+                 "where `type` = '' "
+                 "and user = '%s' " % (self._customer_id,))
+
+        if 'login' in self.configuration:
+            login = "AGENT" + self.configuration['login']
+            query += "and configuration like '%%\"login\";s:%s:\"%s\"%%';" % (
+                     len(login), login)
+
+        else:
+            name = "AGENT" + self.name
+            query += "and nom = '%s'" % (name,)
+
+        d = self._client.query_db(query)
+
+        def check_result(result, transaction):
+            if len(result) < 1:
+                transaction.create_supagent(self)
+
+        d.addCallbacks(check_result, handle_error, (transaction,))
+
+        return d
+
+    def create_agent(self):
+        agent_name = "AGENT" + self.name
+        agent_configuration = dict(self.configuration)
+
+        for key in ('nom', 'login'):
+            if agent_configuration.get(key):
+                agent_configuration[key] = "AGENT" + agent_configuration[key]
+
+        sql = ("insert into adm_vocal_agents_users "
+               "(user, `type`, configuration, nom) values "
+               "('%s', '', '%s', '%s')" % (self._customer_id,
+               phpserialize.dumps(agent_configuration), agent_name))
+
+        return self._client.query_db(sql)
+
+    def delete(self):
+        return self._client.query_db(
+            "delete from adm_vocal_supervisors where `id` = %s" % self.uid)
+
+
+class WebAdminAgent(WebAdminSupervisor):
+    def __init__(self, uid, name, client, project, customer_id, configuration,
+                 ppid):
+        super(WebAdminAgent, self).__init__(uid, name, client, project,
+                                            customer_id, configuration)
+        self.ppid = ppid
+
+        self._supervisor_name = ""
+        self._supervisor_configuration = {}
+
+    def __str__(self):
+        return 'Agent `%s@%s:%s (%s)`' % (self.name, self._whitelabel.name,
+            self._project.name, self.uid)
+
+    def compare(self, supervisor_name, supervisor_configuration):
+        if self.name != "AGENT" + supervisor_name:
+            return False
+
+        if len(self.configuration) != len(supervisor_configuration):
+            return False
+
+        for key in self.configuration:
+            if key in ('nom', 'login'):
+                if self.configuration[key] != \
+                        "AGENT" + supervisor_configuration.get(key):
+                    return False
+            elif self.configuration[key] != supervisor_configuration.get(key):
+                return False
+
+        return True
+
+    def check_supervisor(self, transaction):
+        supervisor_name = self.configuration.get('nom', self.name)[5:]
+        login = self.configuration.get('login')
+
+        query = ("select nom, configuration "
+                 "from adm_vocal_supervisors "
+                 "where `type` = 'supervisor' "
+                 "and user = '%s' " % (self._customer_id,))
+
+        if login is None:
+            query += "and nom = '%s';" % (supervisor_name,)
+
+        else:
+            supervisor_login = login[5:]
+            query += "and configuration like '%%\"login\";s:%s:\"%s\"%%';" % (
+                len(supervisor_login), supervisor_login)
+
+        d = self._client.query_db(query)
+
+        def check_result(result, transaction):
+            if len(result) > 1:
+                transaction.manual_user(self)
+
+            elif len(result) < 1:
+                transaction.delete_user(self)
+
+            else:
+                supervisor_name = result[0][0]
+                supervisor_configuration = phpserialize.loads(result[0][1]) \
+                                           if result[0][1] is not None \
+                                           else {}
+
+                if supervisor_configuration is None:
+                    supervisor_configuration = {}
+
+                if self.ppid != 0 or not self.compare(supervisor_name,
+                                                     supervisor_configuration):
+                    self._supervisor_name = supervisor_name
+                    self._supervisor_configuration = supervisor_configuration
+                    transaction.update_user(self)
+
+        d.addCallbacks(check_result, handle_error, (transaction,))
+
+        return d
+
+    def update(self):
+        new_configuration = dict(self._supervisor_configuration)
+
+        for key in ('nom', 'login'):
+            if key in new_configuration:
+                new_configuration[key] = "AGENT" + new_configuration[key]
+
+        sql = ("update adm_vocal_agents_users "
+            "set ppid = 0, configuration = '%s' "
+            % phpserialize.dumps(new_configuration))
+
+        if self.name != "AGENT" + self._supervisor_name:
+            sql += ", nom = 'AGENT%s' " % self._supervisor_name
+
+        sql += "where `id` = %s" % self.uid
+
+        return self._client.query_db(sql)
+
+    def delete(self):
+        return self._client.query_db(
+            "delete from adm_vocal_agents_users where `id` = %s" % self.uid)
+
+
+class Transaction(object):
+    def __init__(self):
+        self._supagent_creates = []
+        self._user_updates = []
+        self._user_deletes = []
+        self._user_manuals = []
+
+    def create_supagent(self, webadmin_supervisor):
+        log.msg("%s's agent needs to be created." % (webadmin_supervisor,))
+        self._supagent_creates.append(webadmin_supervisor)
+
+    def update_user(self, webadmin_user):
+        log.msg("%s needs to be updated." % (webadmin_user,))
+        self._user_updates.append(webadmin_user)
+
+    def delete_user(self, webadmin_user):
+        log.msg("%s needs to be deleted." % (webadmin_user,))
+        self._user_deletes.append(webadmin_user)
+
+    def manual_user(self, webadmin_user):
+        log.msg("%s needs a manual action." % (webadmin_user,))
+        self._user_manuals.append(webadmin_user)
+
+    def print_results(self, _):
+        prompt = Prompt("The following actions need to be completed:")
+        stdio.StandardIO(prompt)
+
+        if len(self._supagent_creates):
+            for webadmin_supervisor in self._supagent_creates:
+                prompt.sendLine("- Create supagent for %s"
+                    % (webadmin_supervisor,))
+
+        if len(self._user_updates):
+            for webadmin_user in self._user_updates:
+                prompt.sendLine("- Synchronise %s" % (webadmin_user,))
+
+        if len(self._user_deletes):
+            for webadmin_user in self._user_deletes:
+                prompt.sendLine("- Delete %s" % (webadmin_user,))
+
+        if len(self._user_manuals):
+            for webadmin_user in self._user_manuals:
+                prompt.sendLine("- Manual action required %s"
+                    % (webadmin_user,))
+
+        prompt.ask("Execute").addCallback(self.execute)
+
+    def _execute_create_supagents(self):
+        if len(self._supagent_creates) == 0:
+            return defer.succeed(None)
+
+        deferreds = []
+
+        for webadmin_supervisor in self._supagent_creates:
+            deferreds.append(webadmin_supervisor.create_agent())
+
+        return defer.gatherResults(deferreds)
+
+    def _execute_update_users(self, _):
+        if len(self._user_updates) == 0:
+            return defer.succeed(None)
+
+        deferreds = []
+
+        for webadmin_user in self._user_updates:
+            deferreds.append(webadmin_user.update())
+
+        return defer.gatherResults(deferreds)
+
+    def _execute_delete_users(self, _):
+        if len(self._user_deletes) == 0:
+            return defer.succeed(None)
+
+        deferreds = []
+
+        for webadmin_user in self._user_deletes:
+            deferreds.append(webadmin_user.delete())
+
+        return defer.gatherResults(deferreds)
+
+    def execute(self, do_it_now):
+        if not do_it_now:
+            log.msg("Transaction cancelled by user.")
+            reactor.stop()
+
+        else:
+            log.msg("Here we go, modafucka!")
+
+            d = self._execute_create_supagents()
+            d.addCallback(self._execute_update_users)
+            d.addCallback(self._execute_delete_users)
+            d.addCallback(lambda _: reactor.stop())
+
+
+class Prompt(object, basic.LineReceiver):
+    from os import linesep
+
+    delimiter = linesep
+
+    def __init__(self, question):
+        super(Prompt, self).__init__()
+        self._ignore_input = True
+        self._question = question
+
+    def connectionMade(self):
+        self.sendLine("")
+        self.sendLine(self._question)
+        self.sendLine("")
+
+    def ask(self, prompt):
+        self.sendLine("")
+        self.sendLine("%s? [yes]" % (prompt,))
+
+        self._ignore_input = False
+        self.deferred = defer.Deferred()
+        return self.deferred
+
+    def lineReceived(self, line):
+        if self._ignore_input:
+            return
+
+        else:
+            self._ignore_input = True
+            self.sendLine("")
+
+            line = line.strip()
+            if len(line) == 0 or line.lower() == 'y' or line.lower() == 'yes':
+                self.deferred.callback(True)
+            else:
+                self.deferred.callback(False)
+
+
+def check_duplicates(users, transaction, args):
+    users_left = list(users)
+
+    for current_user in users:
+        for compared_user in users_left:
+            if current_user.check_duplicate(compared_user):
+                log.msg("Duplicates: %s | %s" % (current_user, compared_user,))
+                transaction.delete_user(compared_user)
+                users_left.remove(compared_user)
+                break
+
+    return defer.succeed(users)
+
+
+def verify_supervisors(supervisors, transaction, args):
+    supervisor_deferreds = [check_duplicates(supervisors, transaction, args)]
+
+    for supervisor in supervisors:
+        supervisor_deferreds.append(supervisor.check_agent(transaction))
+
+    return defer.gatherResults(supervisor_deferreds)
+
+
+def verify_agents(agents, transaction, args):
+    agent_deferreds = [check_duplicates(agents, transaction, args)]
+
+    for agent in agents:
+        agent_deferreds.append(agent.check_supervisor(transaction))
+
+    return defer.gatherResults(agent_deferreds)
+
+
+def retrieve_users(projects, transaction, args):
+    project_deferreds = []
+
+    for project in projects:
+        d = project.get_agents()
+        d.addCallbacks(verify_agents, handle_error, (transaction, args))
+        project_deferreds.append(d)
+
+        dsup = project.get_supervisors()
+        dsup.addCallbacks(verify_supervisors, handle_error,
+                          (transaction, args))
+        project_deferreds.append(d)
+
+    return defer.gatherResults(project_deferreds)
+
+
+def retrieve_projects(whitelabels, transaction, args):
+    whitelabel_deferreds = []
+
+    for whitelabel in whitelabels:
+        d = whitelabel.get_projects(args.project)
+        d.addCallbacks(retrieve_users, handle_error, (transaction, args))
+        whitelabel_deferreds.append(d)
+
+    return defer.gatherResults(whitelabel_deferreds)
+
+
+def launch_fix(_, webadmin_client, transaction, args):
+    log.msg("Launching fix: ", vars(args))
+
+    d = webadmin_client.get_whitelabels(args.whitelabel)
+    d.addCallbacks(retrieve_projects, handle_error, (transaction, args))
+    d.addCallbacks(transaction.print_results, handle_error)
+
+
+def main(args):
+    log.startLogging(sys.stdout)
+    log.msg("IV2US 2.2 supervisor desynchronisation fix script starting up.")
+
+    webadmin_client = WebAdminClient(args)
+    transaction = Transaction()
+
+    deferreds = [
+        webadmin_client.ready_deferred,
+    ]
+
+    when_ready = defer.gatherResults(deferreds)
+    when_ready.addCallbacks(launch_fix, handle_error,
+        (webadmin_client, transaction, args))
+
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    main(args)
+    reactor.run()
