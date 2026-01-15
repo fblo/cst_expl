@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Test pour interroger le dispatch d'un projet CCCP
-# Usage: python3 test_dispatch_project.py <ip> <port> [wait_seconds]
-
 import sys
+import json
+from datetime import datetime
 
 sys.path.insert(0, "/home/fblo/Documents/repos/iv-cccp/src")
 sys.path.insert(0, "/home/fblo/Documents/repos/iv-cccp/ivcommons/src")
@@ -13,164 +12,364 @@ from twisted.internet import reactor, defer
 from cccp.async_module.dispatch import DispatchClient
 import cccp.protocols.messages.explorer as message
 
+PROJECT = "MPU_PREPROD"
 
-class TestDispatchClient(DispatchClient):
+
+def format_date_to_second(date_str):
+    if not date_str or date_str in ("", "None"):
+        return ""
+    try:
+        if date_str.endswith("Z"):
+            date_str = date_str[:-1] + "+00:00"
+        dt = datetime.fromisoformat(date_str)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except:
+        return date_str
+
+
+def format_session_type(session_type):
+    if session_type == "1" or session_type == 1:
+        return "incoming"
+    elif session_type == "3" or session_type == 3:
+        return "outgoing"
+    return str(session_type)
+
+
+def is_call_session(session_id):
+    if session_id and isinstance(session_id, str):
+        return session_id.startswith("session_") or "session_" in session_id
+    return False
+
+
+def is_agent_session(session_id):
+    if session_id and isinstance(session_id, str):
+        return session_id.startswith("user_") or "user_" in session_id
+    return False
+
+
+class ProjectDispatchClient(DispatchClient):
+    def __init__(self, name, ip, port, project):
+        super(ProjectDispatchClient, self).__init__(name, ip, port)
+        self.project = project
+        self.db_path = f"/dispatch_{project}"
+        self.all_sessions = []
+        self.done_callback = None
+
+    def on_list_response(self, session_id, idx, object):
+        super(ProjectDispatchClient, self).on_list_response(session_id, idx, object)
+
+    def on_object_response(self, session_id, idx, object, obj_id):
+        if idx == getattr(self, "sessions_view_idx", None):
+            view = self.tables[idx][0]
+            if hasattr(object, "values"):
+                for e in object.values:
+                    if hasattr(e, "value") and hasattr(e, "field_index"):
+                        field_name = self.xqueries_tables.get(
+                            "communications_sessions", {}
+                        ).get(e.field_index)
+                        if field_name:
+                            try:
+                                index = [
+                                    "create_date",
+                                    "session_type",
+                                    "session_id",
+                                    "terminate_date",
+                                    "user.login",
+                                    "user.name",
+                                ].index(field_name)
+                                view[obj_id][index] = e.value
+                            except (ValueError, IndexError):
+                                pass
+        elif idx in self.tables:
+            view = self.tables[idx][0]
+            if obj_id not in view:
+                view[obj_id] = []
+            if hasattr(object, "values"):
+                for e in object.values:
+                    if hasattr(e, "value"):
+                        view[obj_id].append(e.value)
+
+    def query_list(self, idx, db_root, filter):
+        self.protocol.sendMessage(
+            message.query_list, 1, idx, self.db_path, 0, db_root, filter, 0, "", 0
+        )
+
+    def query_object(self, idx, id, format_id, obj_id):
+        self.protocol.sendMessage(
+            message.query_object, 1, idx, self.db_path, id, format_id, obj_id
+        )
+
     def on_connection_ok(self, server_version, server_date):
-        print("  -> on_connection_ok: version=%s" % server_version)
+        print(f"  -> Connexion OK: version={server_version}")
         self.protocol.sendMessage(message.login, 1, "admin", "admin", 0, False)
 
     def on_login_ok(self, session_id, user_id, explorer_id):
-        print("  -> on_login_ok: session=%s" % session_id)
+        print("  -> Login OK")
         self.protocol.sendMessage(message.use_default_namespaces_index)
 
     def on_login_failed(self, session_id, reason):
-        print("  -> ERROR: login failed - %s" % reason)
+        print(f"  -> ERREUR login: {reason}")
         self.stop()
 
     def on_use_default_namespaces_index_ok(self):
-        print("  -> on_use_default_namespaces_index_ok")
+        print("  -> Index OK")
         if self.d_connect:
             self.d_connect.callback(True)
         else:
             self.connect_done(True)
         self.connection_finished()
-        print("\nAttente de 3 secondes pour mise à jour des vues...")
-        reactor.callLater(3, self.list_project_info)
 
-    def list_project_info(self):
-        print("\n" + "=" * 60)
-        print("=== Projet MPU_PREPROD - Tableau de bord ==========")
-        print("=" * 60)
+        self.sessions_view_idx = self.start_view(
+            "sessions",
+            "communications_sessions",
+            [
+                "create_date",
+                "session_type",
+                "session_id",
+                "terminate_date",
+                "user.login",
+                "user.name",
+            ],
+            "",
+        )
+        print(f"  -> Vue sessions creee: {self.sessions_view_idx}")
+        print("  -> Attente de 5 secondes pour les donnees...")
+        reactor.callLater(5, self.extract_data)
 
-        # Details des queues
-        print("\n{:*^60}".format(" QUEUES (%d) " % len(self.get_queues())))
-        for q_id in self.get_queues()[:20]:
-            view = self.tables[self.queue_view_idx][0]
-            data = view.get(q_id)
-            if data and isinstance(data, list):
-                info = self._format_queue_data(data)
-                if info:
-                    print("\n  [Queue %s] %s" % (q_id, info.get("display_name", "N/A")))
-                    print("  " + "-" * 50)
-                    for key, value in info.items():
-                        if key != "display_name" and value is not None:
-                            print("    %-30s: %s" % (key, value))
+    def extract_data(self):
+        print(f"\n{'=' * 60}")
+        print(f"=== PROJET: {self.project} - {self.db_path} ===")
+        print(f"{'=' * 60}")
 
-        # Details des utilisateurs
-        print("\n{:*^60}".format(" UTILISATEURS (%d) " % len(self.get_users())))
-        for u_id in self.get_users()[:20]:
-            view = self.tables[self.user_view_idx][0]
-            data = view.get(u_id)
-            if data and isinstance(data, list):
-                info = self._format_user_data(data)
-                if info:
+        all_sessions = []
+        max_retries = 8
+        retry_count = [0]
+
+        def poll_for_data():
+            retry_count[0] += 1
+
+            if (
+                hasattr(self, "sessions_view_idx")
+                and self.sessions_view_idx
+                and self.tables.get(self.sessions_view_idx)
+            ):
+                view = self.tables[self.sessions_view_idx][0]
+                count = len(view)
+
+                if count > 0:
+                    print(f"Donnees recues: {count} entrees")
+                    for obj_id, data in view.items():
+                        if data and isinstance(data, list):
+                            session_id = str(data[2]) if len(data) > 2 else ""
+                            if session_id.startswith("b'"):
+                                session_id = session_id[2:-1]
+                            all_sessions.append(
+                                {
+                                    "id": obj_id,
+                                    "create_date": str(data[0])
+                                    if len(data) > 0
+                                    else "",
+                                    "session_type": format_session_type(data[1]),
+                                    "session_id": session_id,
+                                    "terminate_date": str(data[3])
+                                    if len(data) > 3
+                                    else "",
+                                    "user_login": str(data[4]) if len(data) > 4 else "",
+                                    "user_name": str(data[5]) if len(data) > 5 else "",
+                                }
+                            )
+                    process_results()
+                elif retry_count[0] < max_retries:
                     print(
-                        "\n  [Utilisateur %s] %s (%s)"
-                        % (u_id, info.get("login", "N/A"), info.get("name", "N/A"))
+                        f"Attente donnees... (tentative {retry_count[0]}/{max_retries})"
                     )
-                    print("  " + "-" * 50)
-                    for key, value in info.items():
-                        if key not in ["login", "name"] and value is not None:
-                            print("    %-30s: %s" % (key, value))
+                    reactor.callLater(2, poll_for_data)
+                else:
+                    print("Aucune donnee recue apres toutes les tentatives")
+                    process_results()
+            elif retry_count[0] < max_retries:
+                print(f"Attente donnees... (tentative {retry_count[0]}/{max_retries})")
+                reactor.callLater(2, poll_for_data)
+            else:
+                print("Aucune donnee recue")
+                process_results()
 
-        # Details des tasks
-        print("\n{:*^60}".format(" TASKS (%d) " % len(self.get_tasks())))
-        tasks = self.get_tasks()
-        if tasks:
-            for t_id in tasks[:20]:
-                view = self.tables[self.communication_task_view_idx][0]
-                data = view.get(t_id)
-                if data:
-                    print("\n  [Task %s]" % t_id)
-                    print("    Données: %s" % str(data)[:200])
-        else:
-            print("  Aucune task active")
+        def process_results():
+            active = [
+                s
+                for s in all_sessions
+                if not s.get("terminate_date")
+                or s.get("terminate_date") in ("", "None")
+            ]
+            terminated = [
+                s
+                for s in all_sessions
+                if s.get("terminate_date")
+                and s.get("terminate_date") not in ("", "None")
+            ]
 
-        print("\n" + "=" * 60)
-        self.stop()
+            calls_incoming = []
+            calls_outgoing = []
+            agents = []
+            seen_calls = set()
 
-    def _format_queue_data(self, data):
-        """Formate les données d'une queue avec les noms de champs."""
-        if not data or len(data) < 2:
-            return None
+            for s in active:
+                session_id = s.get("session_id", "")
+                user_login = (
+                    s.get("user_login", "").strip("b'").strip("'").strip('"').strip('"')
+                    if s.get("user_login")
+                    else ""
+                )
+                if is_call_session(session_id):
+                    if session_id in seen_calls:
+                        continue
+                    seen_calls.add(session_id)
+                    if s.get("session_type") == "incoming":
+                        calls_incoming.append(
+                            {
+                                "session_id": session_id,
+                                "caller": user_login if user_login else "En_attente",
+                                "callee": "",
+                                "start_time": format_date_to_second(
+                                    s.get("create_date", "")
+                                ),
+                                "status": "active",
+                            }
+                        )
+                    else:
+                        calls_outgoing.append(
+                            {
+                                "session_id": session_id,
+                                "caller": user_login if user_login else "En_attente",
+                                "callee": "",
+                                "start_time": format_date_to_second(
+                                    s.get("create_date", "")
+                                ),
+                                "status": "active",
+                            }
+                        )
+                elif is_agent_session(session_id):
+                    agents.append(
+                        {
+                            "login": s.get("user_login", "").strip("b'").strip("'"),
+                            "name": s.get("user_name", "").strip("b'").strip("'"),
+                            "session_id": session_id,
+                        }
+                    )
 
-        result = {}
-        fields = self._service_xqueries_list
+            terminated_calls = []
+            seen_terminated = set()
+            for s in terminated:
+                session_id = s.get("session_id", "")
+                if is_call_session(session_id):
+                    if session_id in seen_terminated:
+                        continue
+                    seen_terminated.add(session_id)
+                    terminated_calls.append(
+                        {
+                            "session_id": session_id,
+                            "type": s.get("session_type", ""),
+                            "start_time": format_date_to_second(
+                                s.get("create_date", "")
+                            ),
+                            "end_time": format_date_to_second(
+                                s.get("terminate_date", "")
+                            ),
+                            "user": s.get("user_login", "").strip("b'").strip("'")
+                            if s.get("user_login")
+                            else "",
+                        }
+                    )
 
-        for i, value in enumerate(data):
-            if i < len(fields):
-                field_name = fields[i]
-                # Convertir bytes en str pour l'affichage
-                if isinstance(value, bytes):
-                    try:
-                        value = value.decode("utf-8")
-                    except:
-                        pass
-                result[field_name] = value
+            terminated_calls.sort(key=lambda x: x.get("end_time", ""), reverse=True)
 
-        return result
+            output = {
+                "project": self.project,
+                "db_path": self.db_path,
+                "connected": True,
+                "timestamp": datetime.now().isoformat(),
+                "active": {
+                    "incoming_calls": calls_incoming,
+                    "outgoing_calls": calls_outgoing,
+                    "agents": agents,
+                    "total_incoming": len(calls_incoming),
+                    "total_outgoing": len(calls_outgoing),
+                    "total_agents": len(agents),
+                },
+                "terminated": {
+                    "calls": terminated_calls,
+                    "count": len(terminated_calls),
+                },
+            }
 
-    def _format_user_data(self, data):
-        """Formate les données d'un utilisateur avec les noms de champs."""
-        if not data or len(data) < 2:
-            return None
+            print(f"\n=== RESULTATS ===")
+            print(f"Appels entrants actifs: {len(calls_incoming)}")
+            print(f"Appels sortants actifs: {len(calls_outgoing)}")
+            print(f"Agents actifs: {len(agents)}")
+            print(f"Appels termines: {len(terminated_calls)}")
 
-        result = {}
-        fields = self._user_xqueries_list
+            print(f"\n=== JSON ===")
+            print(json.dumps(output, indent=2, default=str))
 
-        for i, value in enumerate(data):
-            if i < len(fields):
-                field_name = fields[i]
-                # Convertir bytes en str pour l'affichage
-                if isinstance(value, bytes):
-                    try:
-                        value = value.decode("utf-8")
-                    except:
-                        pass
-                result[field_name] = value
+            self.output = output
+            self.stop()
 
-        return result
-
-    def get_queues(self):
-        try:
-            view = self.tables[self.queue_view_idx][0]
-            return list(view.keys())
-        except:
-            return []
-
-    def get_users(self):
-        try:
-            view = self.tables[self.user_view_idx][0]
-            return list(view.keys())
-        except:
-            return []
-
-    def get_tasks(self):
-        try:
-            view = self.tables[self.communication_task_view_idx][0]
-            return list(view.keys())
-        except:
-            return []
-
-    def on_error(self, failure):
-        print("  -> ERROR: %s" % failure)
-        self.stop()
+        reactor.callLater(3, poll_for_data)
 
     def stop(self):
-        print("\nDéconnexion...")
+        print("\nDeconnexion...")
         try:
             self.protocol.transport.loseConnection()
         except:
             pass
         reactor.stop()
+        if self.done_callback:
+            self.done_callback(self.output)
 
 
-def test_dispatch_project(ip="10.199.30.67", port=20103, wait=3):
-    print("Connexion dispatch à %s:%s..." % (ip, port))
-    print("Projet: MPU_PREPROD")
-    print("Login: admin/admin")
+def get_dispatch_sessions(
+    ip="10.199.30.67", port=20103, project="MPU_PREPROD", timeout=25
+):
+    import threading
+    import time
+    from multiprocessing import Queue
 
-    client = TestDispatchClient("dispatch_test", ip, port)
+    result_queue = Queue()
+
+    def run_client():
+        client = ProjectDispatchClient("dispatch_test", ip, port, project)
+        client.done_callback = lambda out: result_queue.put(out)
+        client.connect()
+        reactor.run()
+
+    def stop_reactor():
+        time.sleep(timeout)
+        try:
+            reactor.callLater(0, reactor.stop)
+        except:
+            pass
+
+    thread = threading.Thread(target=run_client)
+    thread.daemon = True
+    thread.start()
+
+    stop_thread = threading.Thread(target=stop_reactor)
+    stop_thread.daemon = True
+    stop_thread.start()
+
+    try:
+        result = result_queue.get(timeout=timeout + 2)
+        return result
+    except:
+        return None
+
+
+def test_dispatch_project(ip="10.199.30.67", port=20103, project="MPU_PREPROD"):
+    print(f"=== Test Dispatch CCCP - Projet {project} ===")
+    print(f"Serveur: {ip}:{port}")
+    print(f"Chemin: /dispatch_{project}")
+
+    client = ProjectDispatchClient("dispatch_test", ip, port, project)
     client.connect()
     reactor.run()
 
@@ -178,6 +377,6 @@ def test_dispatch_project(ip="10.199.30.67", port=20103, wait=3):
 if __name__ == "__main__":
     ip = sys.argv[1] if len(sys.argv) > 1 else "10.199.30.67"
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 20103
-    wait = int(sys.argv[3]) if len(sys.argv) > 3 else 3
+    project = sys.argv[3] if len(sys.argv) > 3 else "MPU_PREPROD"
 
-    test_dispatch_project(ip, port, wait)
+    test_dispatch_project(ip, port, project)

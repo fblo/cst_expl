@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, after_this_request
+from flask_cors import CORS
 import json
 import subprocess
 import sys
@@ -9,39 +10,127 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
+CORS(app)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Cache for dispatch call data
+_calls_cache = {"data": None, "timestamp": 0}
+CACHE_DURATION = 30  # seconds
 
-def get_active_calls():
-    """Get active calls from REAL CCCP sessions"""
+
+def get_dispatch_call_data():
+    """Get real call data from CCCP dispatch with caching using subprocess"""
+    import time
+
+    now = time.time()
+
+    if _calls_cache["data"] and (now - _calls_cache["timestamp"]) < CACHE_DURATION:
+        return _calls_cache["data"]
+
     try:
-        import get_sessions
+        cmd = [
+            "python3",
+            "/home/fblo/Documents/repos/explo-cst/recup_dispatch_project.py",
+            "10.199.30.67",
+            "20103",
+            "MPU_PREPROD",
+        ]
+        proc_result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=30,
+        )
 
-        result = get_sessions.get_sessions()
+        if proc_result.returncode == 0 and proc_result.stdout.strip():
+            output = proc_result.stdout
+            # Extract JSON from output (find the JSON block)
+            json_start = output.find("{")
+            json_end = output.rfind("}")
+            if json_start >= 0 and json_end > json_start:
+                json_str = output[json_start : json_end + 1]
+                dispatch_data = json.loads(json_str)
 
-        if result["success"]:
-            calls = []
-            for session_id in result["sessions"]:
-                calls.append(
+            if not dispatch_data or not dispatch_data.get("connected"):
+                raise Exception("Dispatch not connected")
+
+            active = dispatch_data.get("active", {})
+            terminated = dispatch_data.get("terminated", {})
+
+            incoming = []
+            for call in active.get("incoming_calls", []):
+                incoming.append(
                     {
-                        "session_id": str(session_id),
-                        "caller": None,
-                        "callee": None,
-                        "start_time": None,
-                        "duration": None,
-                        "direction": None,
-                        "status": "active",
+                        "session_id": call.get("session_id", "N/A"),
+                        "caller": call.get("caller", "-"),
+                        "callee": call.get("callee", "-"),
+                        "start_time": call.get("start_time", "-"),
+                        "direction": "incoming",
+                        "status": call.get("status", "active"),
+                        "user_login": "",
+                        "user_name": "",
+                        "queue_name": "",
                     }
                 )
 
-            return calls
-        else:
-            return []
+            outgoing = []
+            for call in active.get("outgoing_calls", []):
+                outgoing.append(
+                    {
+                        "session_id": call.get("session_id", "N/A"),
+                        "caller": call.get("caller", "-"),
+                        "callee": call.get("callee", "-"),
+                        "start_time": call.get("start_time", "-"),
+                        "direction": "outgoing",
+                        "status": call.get("status", "active"),
+                        "user_login": "",
+                        "user_name": "",
+                        "queue_name": "",
+                    }
+                )
 
+            terminated_calls = []
+            for call in terminated.get("calls", []):
+                terminated_calls.append(
+                    {
+                        "session_id": call.get("session_id", ""),
+                        "type": call.get("type", ""),
+                        "start_time": call.get("start_time", ""),
+                        "end_time": call.get("end_time", ""),
+                        "user": call.get("user", ""),
+                    }
+                )
+
+            result = {
+                "incoming": incoming,
+                "outgoing": outgoing,
+                "active": len(incoming) + len(outgoing),
+                "history": terminated_calls,
+                "users": dispatch_data.get("users", []),
+                "queues": dispatch_data.get("queues", []),
+            }
+
+            _calls_cache["data"] = result
+            _calls_cache["timestamp"] = now
+
+            return result
+
+    except subprocess.TimeoutExpired:
+        print("Dispatch call timed out")
     except Exception as e:
-        print(f"Error getting calls: {e}")
-        return []
+        print(f"Error getting dispatch data: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    return _calls_cache["data"] or {
+        "incoming": [],
+        "outgoing": [],
+        "active": 0,
+        "history": [],
+    }
 
 
 def get_session_details(session_id):
@@ -66,10 +155,16 @@ def dashboard():
 
 @app.route("/calls")
 def get_calls():
-    """API endpoint to get active calls"""
+    """DEPRECATED - Now using /api/all for calls data"""
     try:
-        calls = get_active_calls()
-        return jsonify(calls)
+        call_data = get_dispatch_call_data()
+        return jsonify(
+            {
+                "incoming": call_data.get("incoming", []),
+                "outgoing": call_data.get("outgoing", []),
+                "active": call_data.get("active", 0),
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -88,148 +183,63 @@ def session_details():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/sessions")
-def list_sessions():
-    """API endpoint to list all sessions"""
-    try:
-        import get_sessions
-
-        result = get_sessions.get_sessions()
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route("/api/all")
 def get_all_data():
-    """Get all dashboard data - REAL data from CCCP, NO simulation"""
+    """Get all dashboard data from CCCP dispatch"""
     try:
-        import get_sessions
+        dispatch_data = get_dispatch_call_data()
 
-        result = get_sessions.get_sessions()
+        users = dispatch_data.get("users", [])
+        queues = dispatch_data.get("queues", [])
+        history = dispatch_data.get("history", [])
 
-        # REAL users from CCCP monitoring file - NO simulation
-        real_users = []
-        try:
-            with open("/tmp/cccp_monitoring.json", "r") as f:
-                cccp_data = json.load(f)
-                for u in cccp_data.get("users", []):
-                    phone = u.get("phone")
-                    if phone and phone.startswith("tel:"):
-                        phone = phone[4:]
+        real_sessions = [
+            c.get("session_id", "") for c in history if c.get("session_id")
+        ]
 
-                    # Calculate login duration from login_date if available
-                    login_duration_formatted = "-"
-                    login_date = u.get("login_date", "")
-                    if login_date and login_date != "None" and login_date != "":
-                        try:
-                            from datetime import datetime, timezone
-
-                            login_dt = datetime.fromisoformat(login_date)
-                            now = datetime.now(
-                                timezone.utc if login_dt.tzinfo else None
-                            )
-                            login_seconds = int((now - login_dt).total_seconds())
-                            if login_seconds < 60:
-                                login_duration_formatted = f"{login_seconds}s"
-                            elif login_seconds < 3600:
-                                login_duration_formatted = f"{login_seconds // 60}m"
-                            else:
-                                hours = login_seconds // 3600
-                                minutes = (login_seconds % 3600) // 60
-                                login_duration_formatted = f"{hours}h{minutes}m"
-                        except:
-                            login_duration_formatted = "-"
-
-                    user_type = u.get("type", "agent")
-                    state = u.get("state", "")
-                    profile = u.get("profile", "")
-
-                    # Determine last task display name
-                    last_task = u.get("last_task_display_name", "")
-                    if not last_task:
-                        if "interface" in state.lower():
-                            last_task = "Interface"
-                        elif "plugged" in state.lower():
-                            last_task = "Traitement"
-                        elif "pause" in state.lower():
-                            last_task = "Pause"
-                        else:
-                            last_task = state.title()
-
-                    real_users.append(
-                        {
-                            "login": u.get("login", "N/A"),
-                            "name": u.get("name", u.get("login", "N/A")),
-                            "phone": phone if phone and phone != "None" else "-",
-                            "type": user_type,
-                            "state": state if state else "unknown",
-                            "last_task_display_name": last_task,
-                            "login_duration_formatted": login_duration_formatted,
-                            "session_id": u.get("session_id", ""),
-                            "mode": u.get("mode", ""),
-                            "profile": profile,
-                        }
-                    )
-        except Exception as e:
-            print(f"Error reading CCCP data: {e}")
-            real_users = []
-
-        # REAL queues from CCCP monitoring file - NO simulation
-        real_queues = []
-        try:
-            with open("/tmp/cccp_monitoring.json", "r") as f:
-                cccp_data = json.load(f)
-                for q in cccp_data.get("queues", []):
-                    name = q.get("name", "")
-                    # Skip cdep queues
-                    if "cdep:" in name.lower():
-                        continue
-                    real_queues.append(
-                        {
-                            "id": q.get("id"),
-                            "name": name,
-                            "display_name": q.get("display_name", q.get("name", "N/A")),
-                            "logged": int(q.get("logged", 0)),
-                            "working": int(q.get("working", 0)),
-                            "waiting": int(q.get("waiting", 0)),
-                        }
-                    )
-        except Exception as e:
-            print(f"Error reading CCCP queues: {e}")
-            real_queues = []
-
-        # Get real calls from CCCP sessions
-        calls = get_active_calls()
-
-        # Calculate stats from real users
-        supervisors_count = len([u for u in real_users if u["type"] == "supervisor"])
-        agents_count = len([u for u in real_users if u["type"] == "agent"])
-        logged_in_count = len(
-            [u for u in real_users if u["state"] and "plugged" in u["state"].lower()]
+        supervisors_count = len(
+            [u for u in users if u.get("type", "").lower() == "supervisor"]
         )
+        agents_count = len([u for u in users if u.get("type", "").lower() == "agent"])
+        logged_in_count = len(users)
 
-        # Return REAL CCCP data - NO simulation
         return jsonify(
             {
                 "connected": True,
-                "last_update": "2025-01-14 " + datetime.now().strftime("%H:%M:%S"),
+                "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "stats": {
-                    "total_users": len(real_users),
+                    "total_users": len(users),
                     "supervisors": supervisors_count,
                     "agents": agents_count,
                     "logged_in": logged_in_count,
                 },
-                "users": real_users,
-                "queues": real_queues,
-                "calls": {
-                    "incoming": calls[:5],
-                    "outgoing": calls[5:],
-                    "active": len(calls),
-                    "history": [],
+                "users": users,
+                "queues": queues,
+                "calls": dispatch_data,
+                "real_sessions": real_sessions,
+                "message": "Data from CCCP dispatch",
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        return jsonify(
+            {
+                "connected": False,
+                "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "stats": {
+                    "total_users": 0,
+                    "supervisors": 0,
+                    "agents": 0,
+                    "logged_in": 0,
                 },
-                "real_sessions": result["sessions"] if result["success"] else [],
-                "message": "Real data from CCCP monitoring - no simulation",
+                "users": [],
+                "queues": [],
+                "calls": {"incoming": [], "outgoing": [], "active": 0, "history": []},
+                "real_sessions": [],
+                "error": str(e),
             }
         )
     except Exception as e:
@@ -255,41 +265,10 @@ def get_all_data():
 def get_api_calls():
     """API endpoint for frontend calls"""
     try:
-        calls = get_active_calls()
-        return jsonify(
-            {"incoming": calls, "outgoing": [], "active": len(calls), "history": []}
-        )
+        call_data = get_dispatch_call_data()
+        return jsonify(call_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/sessions/search")
-def search_sessions():
-    """Search and list available sessions"""
-    try:
-        import get_sessions
-
-        result = get_sessions.get_sessions()
-
-        if result["success"]:
-            return jsonify(
-                {
-                    "sessions": result["sessions"],
-                    "count": result["count"],
-                    "success": True,
-                }
-            )
-        else:
-            return jsonify(
-                {
-                    "sessions": [],
-                    "count": 0,
-                    "error": result.get("error", "Unknown error"),
-                    "success": False,
-                }
-            )
-    except Exception as e:
-        return jsonify({"sessions": [], "count": 0, "error": str(e), "success": False})
 
 
 @app.route("/api/session/<session_id>")
