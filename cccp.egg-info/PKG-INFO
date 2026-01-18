@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: cccp
-Version: 1.4.6
-Author: SOFTeam
-Author-email: softeam@interact-iv.com
-Requires: pyparsing (>=1.5)
-Dynamic: author
-Dynamic: author-email
-Dynamic: requires

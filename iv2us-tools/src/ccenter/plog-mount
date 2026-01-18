@@ -1,1 +1,0 @@
-mount -t nfs,rw,noatime svc-inf-prd-sto-fr-501:/volume2/ccc_logs/interact-iv /stofr501

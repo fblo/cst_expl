@@ -1,0 +1,20 @@
+# CCCP Explorer - Python Dependencies (Offline Installation)
+# All packages are included in installation/packages/
+# Install with: pip install --no-index --find-links=installation/packages -r installation/requirements.txt
+
+pyparsing>=1.5
+Flask>=2.0
+Flask-CORS>=3.0
+twisted>=18.0
+
+# ========================================
+# Offline Installation:
+# pip install --no-index --find-links=installation/packages -r installation/requirements.txt
+# pip install -e .
+# ========================================
+
+# ========================================
+# Online Installation:
+# pip install -r installation/requirements.txt
+# pip install -e .
+# ========================================
