@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCCP Console</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 10px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #111;
+            border: 1px solid #333;
+            margin-bottom: 10px;
+        }
+        .session-info {
+            font-size: 12px;
+            color: #888;
+        }
+        .session-name {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        .status {
+            display: flex;
+            gap: 15px;
+            font-size: 11px;
+        }
+        .status-item {
+            color: #666;
+        }
+        .status-item span {
+            color: #00ff00;
+        }
+        .console-container {
+            flex: 1;
+            background: #000;
+            border: 1px solid #333;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .console-header {
+            display: grid;
+            grid-template-columns: 185px 330px 330px 150px 200px 1fr;
+            gap: 0;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            font-weight: bold;
+            font-size: 11px;
+            color: #ffaa00;
+        }
+        .console-header div {
+            padding: 6px 8px;
+            border-right: 1px solid #333;
+        }
+        .console {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+        .console::-webkit-scrollbar {
+            width: 8px;
+        }
+        .console::-webkit-scrollbar-track {
+            background: #111;
+        }
+        .console::-webkit-scrollbar-thumb {
+            background: #333;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: 185px 330px 330px 150px 200px 1fr;
+            gap: 0;
+            border-bottom: 1px solid #1a1a1a;
+            line-height: 1.4;
+        }
+        .row:hover {
+            background: #0a0a0a;
+        }
+        .row div {
+            padding: 4px 8px;
+            border-right: 1px solid #1a1a1a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: copy;
+        }
+        .row div:hover {
+            background: #21262d;
+        }
+        .row .date { color: #888; }
+        .row .source { color: #58a6ff; }
+        .row .target { color: #cba6f7; }
+        .row .state { color: #d29922; }
+        .row .name { color: #69f0ae; }
+        .row .data { 
+            color: #c9d1d9; 
+            white-space: pre-wrap;
+            overflow: visible;
+            text-overflow: clip;
+        }
+        .line.error { color: #ff4444; }
+        .line.success { color: #00ff00; }
+        .line.info { color: #888; }
+        .line.header { color: #ffaa00; font-weight: bold; }
+        .controls {
+            display: flex;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #111;
+            border: 1px solid #333;
+            margin-top: 10px;
+        }
+        .btn {
+            background: #222;
+            color: #00ff00;
+            border: 1px solid #333;
+            padding: 5px 12px;
+            font-family: inherit;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background: #333;
+            border-color: #00ff00;
+        }
+        .btn.active {
+            background: #00ff00;
+            color: #000;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 1px solid #00ff00;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .empty {
+            color: #444;
+            text-align: center;
+            padding: 20px;
+        }
+        .data-highlight-x {
+            background: #23863644;
+            color: #3fb950;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        .data-highlight-called {
+            background: #d2992244;
+            color: #d29922;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="session-info">
+                <span class="session-name" id="sessionName">...</span>
+            </div>
+            <div class="status">
+                <div class="status-item">Object ID: <span id="objectId">-</span></div>
+                <div class="status-item">Lignes: <span id="lineCount">0</span></div>
+                <div class="status-item">Statut: <span id="status">Attente...</span></div>
+            </div>
+        </div>
+        
+        <div class="console-container">
+            <div class="console-header">
+                <div>Date</div>
+                <div>Source</div>
+                <div>Target</div>
+                <div>State</div>
+                <div>Name</div>
+                <div>Data</div>
+            </div>
+            <div class="console" id="console"></div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn" onclick="runCommand()" id="runBtn">▶ Executer</button>
+            <button class="btn" onclick="clearConsole()">X Effacer</button>
+            <button class="btn" onclick="toggleAuto()" id="autoBtn">∞ Auto: OFF</button>
+            <button class="btn" onclick="window.close()">✕ Fermer</button>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const session = urlParams.get('session') || 'inconnue';
+        let autoRefresh = false;
+        let autoInterval = null;
+
+        document.getElementById('sessionName').textContent = session;
+
+        function setStatus(text, loading = false) {
+            const el = document.getElementById('status');
+            el.textContent = text;
+            el.style.color = loading ? '#ffaa00' : '#00ff00';
+        }
+
+        function setObjectId(id) {
+            document.getElementById('objectId').textContent = id || '-';
+        }
+
+        function clearConsole() {
+            document.getElementById('console').innerHTML = '<div class="empty">Console effacee</div>';
+            document.getElementById('lineCount').textContent = '0';
+        }
+
+        function toggleAuto() {
+            autoRefresh = !autoRefresh;
+            const btn = document.getElementById('autoBtn');
+            if (autoRefresh) {
+                btn.textContent = '∞ Auto: ON';
+                btn.classList.add('active');
+                runCommand();
+                autoInterval = setInterval(runCommand, 30000);
+                addInfo('Auto-refresh active (30s)');
+            } else {
+                btn.textContent = '∞ Auto: OFF';
+                btn.classList.remove('active');
+                if (autoInterval) clearInterval(autoInterval);
+                addInfo('Auto-refresh desactive');
+            }
+        }
+
+        function addInfo(text) {
+            const console = document.getElementById('console');
+            const div = document.createElement('div');
+            div.className = 'row info';
+            div.style.color = '#888';
+            div.style.padding = '4px 8px';
+            div.textContent = text;
+            console.appendChild(div);
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function renderTable(columns) {
+            const console = document.getElementById('console');
+            console.innerHTML = '';
+            
+            columns.forEach(col => {
+                const row = document.createElement('div');
+                row.className = 'row';
+                row.innerHTML = `
+                    <div class="date" data-value="${escapeHtml(escapeQuotes(col.date || ''))}">${escapeHtml(col.date || '-')}</div>
+                    <div class="source" data-value="${escapeHtml(escapeQuotes(col.source || ''))}" title="${escapeHtml(col.source || '')}">${escapeHtml(col.source || '-')}</div>
+                    <div class="target" data-value="${escapeHtml(escapeQuotes(col.target || ''))}" title="${escapeHtml(col.target || '')}">${escapeHtml(col.target || '-')}</div>
+                    <div class="state" data-value="${escapeHtml(escapeQuotes(col.state || ''))}">${escapeHtml(col.state || '-')}</div>
+                    <div class="name" data-value="${escapeHtml(escapeQuotes(col.name || ''))}" title="${escapeHtml(col.name || '')}">${escapeHtml(col.name || '-')}</div>
+                    <div class="data" data-value="${escapeHtml(escapeQuotes(col.data || ''))}" title="${escapeHtml(col.data || '')}">${formatData(col.data || '-')}</div>
+                `;
+                console.appendChild(row);
+            });
+            
+            // Add right-click handler for all cells
+            console.querySelectorAll('.row div').forEach(cell => {
+                cell.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const text = cell.getAttribute('data-value');
+                    copyToClipboard(text, cell);
+                });
+            });
+            
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function escapeQuotes(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        function copyToClipboard(text, element) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalColor = element.style.backgroundColor;
+                element.style.backgroundColor = '#238636';
+                element.style.color = '#fff';
+                setTimeout(() => {
+                    element.style.backgroundColor = originalColor;
+                    element.style.color = '';
+                }, 300);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        }
+
+        function formatData(text) {
+            // Highlight fields starting with X-
+            text = text.replace(/(X-[^\s,;]+)/g, '<span class="data-highlight-x">$1</span>');
+            // Highlight Called number and Caller's number
+            text = text.replace(/(Called number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
+            text = text.replace(/(Caller's number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
+            return text;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function runCommand() {
+            const btn = document.getElementById('runBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>';
+            setStatus('Execution...', true);
+            
+            try {
+                const res = await fetch('/api/console/session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({session: session})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    setStatus('OK');
+                    setObjectId(data.object_id);
+                    document.getElementById('lineCount').textContent = data.count || 0;
+                    
+                    if (data.columns && data.columns.length > 0) {
+                        renderTable(data.columns);
+                    } else {
+                        document.getElementById('console').innerHTML = '<div class="empty">Aucune donnee</div>';
+                    }
+                } else {
+                    setStatus('Erreur');
+                    const console = document.getElementById('console');
+                    console.innerHTML = '<div class="empty" style="color:#ff4444">Erreur: ' + escapeHtml(data.error || 'inconnue') + '</div>';
+                }
+            } catch (e) {
+                setStatus('Erreur reseau');
+                const console = document.getElementById('console');
+                console.innerHTML = '<div class="empty" style="color:#ff4444">Erreur reseau: ' + escapeHtml(e.message) + '</div>';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '▶ Executer';
+        }
+
+        // Auto-run on load
+        setTimeout(runCommand, 500);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                e.preventDefault();
+                runCommand();
+            } else if (e.key === 'Escape') {
+                window.close();
+            } else if (e.key === 'c' && e.ctrlKey) {
+                e.preventDefault();
+                clearConsole();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCCP Explorer - Modern Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #161b22 0%, #21262d 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #58a6ff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .header h1::before {
+            content: '🔗';
+            font-size: 24px;
+        }
+        
+        .stats-bar {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 24px;
+            display: flex;
+            gap: 32px;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #58a6ff;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .tabs {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            padding: 0 24px;
+        }
+        
+        .tab {
+            padding: 12px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #8b949e;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: #c9d1d9;
+            background: #21262d;
+        }
+        
+        .tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
+        
+        .content {
+            padding: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: #21262d;
+            padding: 12px 16px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #c9d1d9;
+        }
+        
+        .card-body {
+            padding: 16px;
+        }
+        
+        .events-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .event-item {
+            display: flex;
+            gap: 16px;
+            padding: 12px 16px;
+            border-bottom: 1px solid #21262d;
+            transition: background 0.2s;
+        }
+        
+        .event-item:hover {
+            background: #21262d;
+        }
+        
+        .event-time {
+            font-size: 12px;
+            color: #8b949e;
+            white-space: nowrap;
+            min-width: 140px;
+        }
+        
+        .event-category {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        
+        .event-category.user_state {
+            background: #23863644;
+            color: #3fb950;
+        }
+        
+        .event-category.connection {
+            background: #1f6feb44;
+            color: #58a6ff;
+        }
+        
+        .event-category.session {
+            background: #a371f744;
+            color: #cba6f7;
+        }
+        
+        .event-category.ccxml {
+            background: #d2992244;
+            color: #d29922;
+        }
+        
+        .event-category.explorer {
+            background: #f8514944;
+            color: #f85149;
+        }
+        
+        .event-category.unknown {
+            background: #30363d44;
+            color: #8b949e;
+        }
+        
+        .event-name {
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 12px;
+            color: #c9d1d9;
+            flex: 1;
+        }
+        
+        .event-source {
+            font-size: 11px;
+            color: #8b949e;
+            min-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th,
+        .table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #21262d;
+        }
+        
+        .table th {
+            background: #21262d;
+            font-size: 11px;
+            font-weight: 600;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .table tr:hover td {
+            background: #21262d;
+        }
+        
+        .user-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        
+        .user-badge.supervisor {
+            background: linear-gradient(135deg, #667eea22, #764ba222);
+            color: #a8a4ff;
+            border: 1px solid #667eea44;
+        }
+        
+        .user-badge.agent {
+            background: linear-gradient(135deg, #11998e22, #38ef7d22);
+            color: #69f0ae;
+            border: 1px solid #11998e44;
+        }
+        
+        .state-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .state-badge.plugged {
+            background: #23863644;
+            color: #3fb950;
+        }
+        
+        .state-badge.unplugged {
+            background: #da363344;
+            color: #f85149;
+        }
+        
+        .state-badge.ringing {
+            background: #d2992244;
+            color: #d29922;
+        }
+        
+        .state-badge.pause {
+            background: #f8514944;
+            color: #ff7b72;
+        }
+        
+        .queue-stat {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 4px;
+        }
+        
+        .queue-stat.logged {
+            background: #23863644;
+            color: #3fb950;
+        }
+        
+        .queue-stat.working {
+            background: #1f6feb44;
+            color: #58a6ff;
+        }
+        
+        .queue-stat.waiting {
+            background: #d2992244;
+            color: #d29922;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2ea043;
+        }
+        
+        .btn-secondary {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+        }
+        
+        .btn-secondary:hover {
+            background: #30363d;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 6px;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 13px;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        
+        .protocol-info {
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 11px;
+            background: #0d1117;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        
+        .protocol-info table {
+            width: 100%;
+        }
+        
+        .protocol-info td {
+            padding: 4px 8px;
+        }
+        
+        .protocol-info td:first-child {
+            color: #58a6ff;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #484f58;
+            font-size: 12px;
+            border-top: 1px solid #30363d;
+            margin-top: 40px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>CCCP Explorer</h1>
+        <div style="font-size: 12px; color: #8b949e;">10.199.30.67</div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat-item">
+            <span class="stat-value" id="stat-users">0</span>
+            <span class="stat-label">Utilisateurs</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value" id="stat-queues">0</span>
+            <span class="stat-label">Files d'attente</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value" id="stat-history">0</span>
+            <span class="stat-label">Appels historiques</span>
+        </div>
+    </div>
+    
+    <div class="tabs">
+        <div class="tab active" data-tab="users">Utilisateurs</div>
+        <div class="tab" data-tab="queues">Files d'attente</div>
+        <div class="tab" data-tab="history">Historique</div>
+        <div class="tab" data-tab="connect">Connexion</div>
+    </div>
+    
+    <div class="content">
+        <!-- Users Tab -->
+        <div id="users-tab" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Utilisateurs consistent</span>
+                    <button class="btn btn-secondary" onclick="loadUsers()">Actualiser</button>
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Nom</th>
+                                <th>Login</th>
+                                <th>Mode</th>
+                                <th>Queue</th>
+                                <th>Connexion</th>
+                                <th>Durée</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-container">
+                            <tr>
+                                <td colspan="6" class="empty-state">Cliquez sur "Actualiser" pour charger les utilisateurs</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Queues Tab -->
+        <div id="queues-tab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Files d'attente</span>
+                    <button class="btn btn-secondary" onclick="loadQueues()">Actualiser</button>
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Queue</th>
+                                <th>Logged</th>
+                                <th>Working</th>
+                                <th>Waiting</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queues-container">
+                            <tr>
+                                <td colspan="4" class="empty-state">Cliquez sur "Actualiser" pour charger les queues</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- History Tab -->
+        <div id="history-tab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Historique des appels</span>
+                    <button class="btn btn-secondary" onclick="loadHistory()">Actualiser</button>
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Session</th>
+                                <th>File</th>
+                                <th>Agent</th>
+                                <th>Appelant</th>
+                                <th>Appelé</th>
+                                <th>Début</th>
+                                <th>Durée</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-container">
+                            <tr>
+                                <td colspan="7" class="empty-state">Cliquez sur "Actualiser" pour charger l'historique</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Connect Tab -->
+        <div id="connect-tab" class="tab-content">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Connexion au serveur CCCP</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Serveur</label>
+                            <input type="text" id="server-host" value="10.199.30.67">
+                        </div>
+                        <div class="form-group">
+                            <label>Port</label>
+                            <select id="server-port">
+                                <option value="20101">20101 (Proxy)</option>
+                                <option value="20103">20103 (Dispatch)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Utilisateur</label>
+                            <input type="text" id="server-username" value="supervisor_gtri">
+                        </div>
+                        <div class="form-group">
+                            <label>Mot de passe</label>
+                            <input type="password" id="server-password" value="toto">
+                        </div>
+                        <button class="btn btn-primary" onclick="connectToServer()">
+                            Se connecter
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Connexions actives</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="connections-list">
+                            <div class="empty-state">
+                                <p>Aucune connexion active</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        CCCP Explorer - Clone moderne de consistent_explorer.exe<br>
+        Basé sur l'analyse reverse-engineering du binaire
+    </div>
+    
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+            });
+        });
+        
+        // Load users
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const users = await response.json();
+                document.getElementById('stat-users').textContent = users.length;
+                
+                const tbody = document.getElementById('users-container');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucun utilisateur trouvé</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td>${user.user_name || '-'}</td>
+                        <td>${user.login || '-'}</td>
+                        <td>${user.mode || '-'}</td>
+                        <td>${user.queue || '-'}</td>
+                        <td>${user.create_date_iso ? user.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
+                        <td>${user.duration || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Error loading users:', e);
+            }
+        }
+        
+        // Load queues
+        async function loadQueues() {
+            try {
+                const response = await fetch('/api/queues');
+                const queues = await response.json();
+                document.getElementById('stat-queues').textContent = queues.length;
+                
+                const tbody = document.getElementById('queues-container');
+                if (queues.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune queue trouvée</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = queues.map(queue => `
+                    <tr>
+                        <td>${queue.name || queue.display_name || '-'}</td>
+                        <td><span class="queue-stat logged">${queue.logged || 0}</span></td>
+                        <td><span class="queue-stat working">${queue.working || 0}</span></td>
+                        <td><span class="queue-stat waiting">${queue.waiting || 0}</span></td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Error loading queues:', e);
+            }
+        }
+        
+        // Load history
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const history = await response.json();
+                document.getElementById('stat-history').textContent = history.length;
+                
+                const tbody = document.getElementById('history-container');
+                if (history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Aucun appel dans l\'historique</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = history.map(call => `
+                    <tr style="cursor: pointer;" onclick="openConsole('${call.session_id || ''}')">
+                        <td style="font-family: monospace; font-size: 11px;">${(call.session_id || '-').substring(0, 25)}</td>
+                        <td>${call.queue_name || '-'}</td>
+                        <td>${call.agent || '-'}</td>
+                        <td>${call.caller || '-'}</td>
+                        <td>${call.called || '-'}</td>
+                        <td>${call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
+                        <td>${call.duration || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Error loading history:', e);
+            }
+        }
+        
+        // Open console for a session
+        function openConsole(sessionId) {
+            if (sessionId) {
+                window.open('/console?session=' + encodeURIComponent(sessionId), '_blank');
+            }
+        }
+        
+        // Connect to server
+        async function connectToServer() {
+            const host = document.getElementById('server-host').value;
+            const port = document.getElementById('server-port').value;
+            const username = document.getElementById('server-username').value;
+            const password = document.getElementById('server-password').value;
+            
+            try {
+                const response = await fetch('/api/connect', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({host, port, username, password})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    updateConnectionsList();
+                    loadUsers();
+                    loadHistory();
+                } else {
+                    alert('Échec de connexion: ' + (data.error || 'Erreur inconnue'));
+                }
+            } catch (e) {
+                console.error('Connection error:', e);
+                alert('Erreur de connexion: ' + e.message);
+            }
+        }
+        
+        // Update connections list
+        async function updateConnectionsList() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                const container = document.getElementById('connections-list');
+                if (Object.keys(status.clients || {}).length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>Aucune connexion active</p></div>';
+                    return;
+                }
+                
+                container.innerHTML = Object.entries(status.clients || {}).map(([name, client]) => `
+                    <div style="padding: 8px; border-bottom: 1px solid #21262d;">
+                        <strong>${name}</strong>: ${client.connected ? '✓ Connecté (' + client.session_id + ')' : '✗ Déconnecté'}
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Error updating connections:', e);
+            }
+        }
+        
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUsers();
+            loadHistory();
+            // Auto-refresh history every 5 seconds
+            setInterval(loadHistory, 5000);
+        });
+    </script>
+</body>
+</html>
