@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -141,14 +141,6 @@
             background: #333;
             border-color: #00ff00;
         }
-        .btn.active {
-            background: #00ff00;
-            color: #000;
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
         .loading {
             display: inline-block;
             width: 12px;
@@ -190,8 +182,8 @@
             </div>
             <div class="status">
                 <div class="status-item">Object ID: <span id="objectId">-</span></div>
-                <div class="status-item">Lignes: <span id="lineCount">0</span></div>
-                <div class="status-item">Statut: <span id="status">Attente...</span></div>
+                <div class="status-item">Lines: <span id="lineCount">0</span></div>
+                <div class="status-item">Status: <span id="status">Waiting...</span></div>
             </div>
         </div>
         
@@ -208,18 +200,13 @@
         </div>
         
         <div class="controls">
-            <button class="btn" onclick="runCommand()" id="runBtn">▶ Executer</button>
-            <button class="btn" onclick="clearConsole()">X Effacer</button>
-            <button class="btn" onclick="toggleAuto()" id="autoBtn">∞ Auto: OFF</button>
-            <button class="btn" onclick="window.close()">✕ Fermer</button>
+            <button class="btn" onclick="window.close()">✕ Close</button>
         </div>
     </div>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        const session = urlParams.get('session') || 'inconnue';
-        let autoRefresh = false;
-        let autoInterval = null;
+        const session = urlParams.get('session') || 'unknown';
 
         document.getElementById('sessionName').textContent = session;
 
@@ -231,69 +218,6 @@
 
         function setObjectId(id) {
             document.getElementById('objectId').textContent = id || '-';
-        }
-
-        function clearConsole() {
-            document.getElementById('console').innerHTML = '<div class="empty">Console effacee</div>';
-            document.getElementById('lineCount').textContent = '0';
-        }
-
-        function toggleAuto() {
-            autoRefresh = !autoRefresh;
-            const btn = document.getElementById('autoBtn');
-            if (autoRefresh) {
-                btn.textContent = '∞ Auto: ON';
-                btn.classList.add('active');
-                runCommand();
-                autoInterval = setInterval(runCommand, 30000);
-                addInfo('Auto-refresh active (30s)');
-            } else {
-                btn.textContent = '∞ Auto: OFF';
-                btn.classList.remove('active');
-                if (autoInterval) clearInterval(autoInterval);
-                addInfo('Auto-refresh desactive');
-            }
-        }
-
-        function addInfo(text) {
-            const console = document.getElementById('console');
-            const div = document.createElement('div');
-            div.className = 'row info';
-            div.style.color = '#888';
-            div.style.padding = '4px 8px';
-            div.textContent = text;
-            console.appendChild(div);
-            console.scrollTop = console.scrollHeight;
-        }
-
-        function renderTable(columns) {
-            const console = document.getElementById('console');
-            console.innerHTML = '';
-            
-            columns.forEach(col => {
-                const row = document.createElement('div');
-                row.className = 'row';
-                row.innerHTML = `
-                    <div class="date" data-value="${escapeHtml(escapeQuotes(col.date || ''))}">${escapeHtml(col.date || '-')}</div>
-                    <div class="source" data-value="${escapeHtml(escapeQuotes(col.source || ''))}" title="${escapeHtml(col.source || '')}">${escapeHtml(col.source || '-')}</div>
-                    <div class="target" data-value="${escapeHtml(escapeQuotes(col.target || ''))}" title="${escapeHtml(col.target || '')}">${escapeHtml(col.target || '-')}</div>
-                    <div class="state" data-value="${escapeHtml(escapeQuotes(col.state || ''))}">${escapeHtml(col.state || '-')}</div>
-                    <div class="name" data-value="${escapeHtml(escapeQuotes(col.name || ''))}" title="${escapeHtml(col.name || '')}">${escapeHtml(col.name || '-')}</div>
-                    <div class="data" data-value="${escapeHtml(escapeQuotes(col.data || ''))}" title="${escapeHtml(col.data || '')}">${formatData(col.data || '-')}</div>
-                `;
-                console.appendChild(row);
-            });
-            
-            // Add right-click handler for all cells
-            console.querySelectorAll('.row div').forEach(cell => {
-                cell.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    const text = cell.getAttribute('data-value');
-                    copyToClipboard(text, cell);
-                });
-            });
-            
-            console.scrollTop = console.scrollHeight;
         }
 
         function escapeQuotes(text) {
@@ -315,9 +239,7 @@
         }
 
         function formatData(text) {
-            // Highlight fields starting with X-
             text = text.replace(/(X-[^\s,;]+)/g, '<span class="data-highlight-x">$1</span>');
-            // Highlight Called number and Caller's number
             text = text.replace(/(Called number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
             text = text.replace(/(Caller's number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
             return text;
@@ -330,10 +252,7 @@
         }
 
         async function runCommand() {
-            const btn = document.getElementById('runBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span>';
-            setStatus('Execution...', true);
+            setStatus('Running...', true);
             
             try {
                 const res = await fetch('/api/console/session', {
@@ -351,21 +270,45 @@
                     if (data.columns && data.columns.length > 0) {
                         renderTable(data.columns);
                     } else {
-                        document.getElementById('console').innerHTML = '<div class="empty">Aucune donnee</div>';
+                        document.getElementById('console').innerHTML = '<div class="empty">No data</div>';
                     }
                 } else {
-                    setStatus('Erreur');
+                    setStatus('Error');
                     const console = document.getElementById('console');
-                    console.innerHTML = '<div class="empty" style="color:#ff4444">Erreur: ' + escapeHtml(data.error || 'inconnue') + '</div>';
+                    console.innerHTML = '<div class="empty" style="color:#ff4444">Error: ' + escapeHtml(data.error || 'unknown') + '</div>';
                 }
             } catch (e) {
-                setStatus('Erreur reseau');
+                setStatus('Network error');
                 const console = document.getElementById('console');
-                console.innerHTML = '<div class="empty" style="color:#ff4444">Erreur reseau: ' + escapeHtml(e.message) + '</div>';
+                console.innerHTML = '<div class="empty" style="color:#ff4444">Network error: ' + escapeHtml(e.message) + '</div>';
             }
+        }
+
+        function renderTable(columns) {
+            const console = document.getElementById('console');
+            console.innerHTML = '';
             
-            btn.disabled = false;
-            btn.textContent = '▶ Executer';
+            columns.forEach(col => {
+                const row = document.createElement('div');
+                row.className = 'row';
+                row.innerHTML = `
+                    <div class="date" data-value="${escapeHtml(escapeQuotes(col.date || ''))}">${escapeHtml(col.date || '-')}</div>
+                    <div class="source" data-value="${escapeHtml(escapeQuotes(col.source || ''))}" title="${escapeHtml(col.source || '')}">${escapeHtml(col.source || '-')}</div>
+                    <div class="target" data-value="${escapeHtml(escapeQuotes(col.target || ''))}" title="${escapeHtml(col.target || '')}">${escapeHtml(col.target || '-')}</div>
+                    <div class="state" data-value="${escapeHtml(escapeQuotes(col.state || ''))}">${escapeHtml(col.state || '-')}</div>
+                    <div class="name" data-value="${escapeHtml(escapeQuotes(col.name || ''))}" title="${escapeHtml(col.name || '')}">${escapeHtml(col.name || '-')}</div>
+                    <div class="data" data-value="${escapeHtml(escapeQuotes(col.data || ''))}" title="${escapeHtml(col.data || '')}">${formatData(col.data || '-')}</div>
+                `;
+                console.appendChild(row);
+            });
+            
+            console.querySelectorAll('.row div').forEach(cell => {
+                cell.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const text = cell.getAttribute('data-value');
+                    copyToClipboard(text, cell);
+                });
+            });
         }
 
         // Auto-run on load
@@ -378,9 +321,6 @@
                 runCommand();
             } else if (e.key === 'Escape') {
                 window.close();
-            } else if (e.key === 'c' && e.ctrlKey) {
-                e.preventDefault();
-                clearConsole();
             }
         });
     </script>

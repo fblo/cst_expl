@@ -8,10 +8,23 @@
 import subprocess
 import json
 import sys
-from datetime import datetime, timedelta
+import argparse
+from datetime import datetime
 
 DEFAULT_IP = "10.199.30.67"
 DISPATCH_PORT = 20103
+
+
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description="Fetch users and calls from CCCP server"
+    )
+    parser.add_argument(
+        "--host", type=str, default=DEFAULT_IP, help="Server IP address"
+    )
+    parser.add_argument("--port", type=int, default=DISPATCH_PORT, help="Dispatch port")
+    return parser.parse_args()
 
 
 def parse_french_datetime(date_str):
@@ -87,7 +100,7 @@ def parse_active_queues_state(active_queues):
     return "-"
 
 
-def get_user_real_names():
+def get_user_real_names(host=DEFAULT_IP, port=DISPATCH_PORT):
     """Récupère les vrais noms d'utilisateurs depuis dispatch avec tous les champs"""
     try:
         result = subprocess.run(
@@ -98,8 +111,8 @@ def get_user_real_names():
                 "-password",
                 "admin",
                 "-server",
-                DEFAULT_IP,
-                str(DISPATCH_PORT),
+                host,
+                str(port),
                 "-list",
                 "-path",
                 "/dispatch",
@@ -199,7 +212,7 @@ def get_user_real_names():
     return {}
 
 
-def get_ccxml_sessions():
+def get_ccxml_sessions(host=DEFAULT_IP, port=DISPATCH_PORT):
     """Récupère les sessions CCXML et les sépare en utilisateurs/appels"""
     cmd = [
         "/opt/consistent/bin/ccenter_report",
@@ -208,8 +221,8 @@ def get_ccxml_sessions():
         "-password",
         "toto",
         "-server",
-        DEFAULT_IP,
-        str(DISPATCH_PORT),
+        host,
+        str(port),
         "-list",
         "-path",
         "/ccxml",
@@ -281,7 +294,7 @@ def get_ccxml_sessions():
     return [], []
 
 
-def get_dispatch_calls():
+def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
     """Récupère les détails des appels depuis dispatch"""
     cmd = [
         "/opt/consistent/bin/ccenter_report",
@@ -290,8 +303,8 @@ def get_dispatch_calls():
         "-password",
         "toto",
         "-server",
-        DEFAULT_IP,
-        str(DISPATCH_PORT),
+        host,
+        str(port),
         "-list",
         "-path",
         "/dispatch",
@@ -380,17 +393,17 @@ def get_dispatch_calls():
     return {}
 
 
-def get_all_data():
+def get_all_data(host=DEFAULT_IP, port=DISPATCH_PORT):
     """Récupère et combine toutes les données"""
 
     print("Récupération des utilisateurs...", file=sys.stderr)
-    dispatch_users = get_user_real_names()
+    dispatch_users = get_user_real_names(host=host, port=port)
 
     print("Récupération des sessions CCXML...", file=sys.stderr)
-    ccxml_users, ccxml_calls = get_ccxml_sessions()
+    ccxml_users, ccxml_calls = get_ccxml_sessions(host=host, port=port)
 
     print("Récupération des détails dispatch...", file=sys.stderr)
-    dispatch_calls = get_dispatch_calls()
+    dispatch_calls = get_dispatch_calls(host=host, port=port)
 
     print(
         f"CCXML - Utilisateurs: {len(ccxml_users)}, Appels: {len(ccxml_calls)}",
@@ -455,7 +468,7 @@ def get_all_data():
 
     ccxml_calls.sort(key=lambda x: x.get("create_date_iso", ""), reverse=True)
 
-    queues = get_queue_statistics(active_users)
+    queues = get_queue_statistics(active_users, host=host, port=port)
 
     result = {
         "connected": True,
@@ -477,8 +490,9 @@ def get_all_data():
     return result
 
 
-def get_queue_statistics(active_users=None):
+def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DISPATCH_PORT):
     """Récupère les queues et leurs statistiques depuis dispatch"""
+
     queues_cmd = [
         "/opt/consistent/bin/ccenter_report",
         "-login",
@@ -486,8 +500,8 @@ def get_queue_statistics(active_users=None):
         "-password",
         "admin",
         "-server",
-        DEFAULT_IP,
-        str(DISPATCH_PORT),
+        host,
+        str(port),
         "-list",
         "-path",
         "/dispatch",
@@ -523,14 +537,17 @@ def get_queue_statistics(active_users=None):
                 queue_type = parts[2].strip() if len(parts) > 2 and parts[2] else ""
                 display_name = parts[3].strip() if len(parts) > 3 and parts[3] else ""
                 priority = parts[4].strip() if len(parts) > 4 and parts[4] else ""
-                logged = parts[5].strip() if len(parts) > 5 and parts[5] else ""
+                _logged = parts[5].strip() if len(parts) > 5 and parts[5] else ""
                 working = parts[6].strip() if len(parts) > 6 and parts[6] else ""
                 waiting = parts[7].strip() if len(parts) > 7 and parts[7] else ""
 
                 if not name or name == "undefined":
                     continue
 
-                if not name.startswith("Q_"):
+                # Skip VQ_ prefixed queues and user-type entries
+                if name.startswith("VQ_"):
+                    continue
+                if queue_type == "user":
                     continue
 
                 clean_name = clean_queue_name(name)
@@ -575,5 +592,9 @@ def get_queue_statistics(active_users=None):
 
 
 if __name__ == "__main__":
-    result = get_all_data()
+    args = parse_arguments()
+    host = args.host
+    port = args.port
+
+    result = get_all_data(host=host, port=port)
     print(json.dumps(result, indent=2, ensure_ascii=False))

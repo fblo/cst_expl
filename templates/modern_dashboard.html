@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -487,37 +487,37 @@
 <body>
     <div class="header">
         <h1>CCCP Explorer</h1>
-        <div style="font-size: 12px; color: #8b949e;">10.199.30.67</div>
+        <div style="font-size: 12px; color: #8b949e;" id="current-server">Select a project</div>
     </div>
     
-    <div class="stats-bar">
+        <div class="stats-bar">
         <div class="stat-item" style="flex: 1;">
             <span class="stat-value" id="stat-project" style="font-size: 18px; color: #58a6ff;">-</span>
-            <span class="stat-label">Projet</span>
+            <span class="stat-label">Project</span>
         </div>
         <div class="stat-item">
             <span class="stat-value" id="stat-users">0</span>
-            <span class="stat-label">Utilisateurs</span>
+            <span class="stat-label">Users</span>
         </div>
         <div class="stat-item">
             <span class="stat-value" id="stat-queues">0</span>
-            <span class="stat-label">Files d'attente</span>
+            <span class="stat-label">Queues</span>
         </div>
         <div class="stat-item">
             <span class="stat-value" id="stat-history">0</span>
-            <span class="stat-label">Appels historiques</span>
+            <span class="stat-label">Historical Calls</span>
         </div>
         <div class="stat-item" style="margin-left: auto; text-align: right;">
             <span class="stat-value" id="stat-last-update" style="font-size: 14px;">--:--:--</span>
-            <span class="stat-label">Dernière MAJ</span>
+            <span class="stat-label">Last Update</span>
         </div>
     </div>
     
     <div class="tabs">
-        <div class="tab active" data-tab="users">Utilisateurs</div>
-        <div class="tab" data-tab="queues">Files d'attente</div>
-        <div class="tab" data-tab="history">Historique</div>
-        <div class="tab" data-tab="connect">Connexion</div>
+        <div class="tab active" data-tab="users">Users</div>
+        <div class="tab" data-tab="queues">Queues</div>
+        <div class="tab" data-tab="history">History</div>
+        <div class="tab" data-tab="connect">Connection</div>
     </div>
     
     <div class="content">
@@ -525,30 +525,30 @@
         <div id="users-tab" class="tab-content active">
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Utilisateurs CCCP</span>
+                    <span class="card-title">CCCP Users</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="user-search" placeholder="Filtrer..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterUsers()">
-                        <button class="btn btn-secondary" onclick="loadUsers()">Actualiser</button>
+                        <input type="text" id="user-search" placeholder="Filter..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterUsers()">
+                        <button class="btn btn-secondary" onclick="loadUsers()">Refresh</button>
                     </div>
                 </div>
                 <div class="card-body">
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>Nom</th>
+                                <th>Name</th>
                                 <th>Login</th>
-                                <th>État</th>
+                                <th>State</th>
                                 <th>Mode</th>
-                                <th>Projet</th>
-                                <th>Téléphone</th>
-                                <th>Profil</th>
-                                <th>Connexion</th>
-                                <th>Durée</th>
+                                <th>Project</th>
+                                <th>Phone</th>
+                                <th>Profile</th>
+                                <th>Connected</th>
+                                <th>Duration</th>
                             </tr>
                         </thead>
                         <tbody id="users-container">
                             <tr>
-                                <td colspan="9" class="empty-state">Cliquez sur "Actualiser" pour charger les utilisateurs</td>
+                                <td colspan="9" class="empty-state">Click "Refresh" to load users</td>
                             </tr>
                         </tbody>
                     </table>
@@ -560,10 +560,10 @@
         <div id="queues-tab" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Files d'attente</span>
+                    <span class="card-title">Queues</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="queue-search" placeholder="Filtrer..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterQueues()">
-                        <button class="btn btn-secondary" onclick="loadQueues()">Actualiser</button>
+                        <input type="text" id="queue-search" placeholder="Filter..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterQueues()">
+                        <button class="btn btn-secondary" onclick="loadQueues()">Refresh</button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -580,7 +580,7 @@
                         </thead>
                         <tbody id="queues-container">
                             <tr>
-                                <td colspan="6" class="empty-state">Cliquez sur "Actualiser" pour charger les queues</td>
+                                <td colspan="6" class="empty-state">Click "Refresh" to load queues</td>
                             </tr>
                         </tbody>
                     </table>
@@ -592,10 +592,10 @@
         <div id="history-tab" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Historique des appels</span>
+                    <span class="card-title">Call History</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="history-search" placeholder="Filtrer..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterHistory()">
-                        <button class="btn btn-secondary" onclick="loadHistory()">Actualiser</button>
+                        <input type="text" id="history-search" placeholder="Filter..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterHistory()">
+                        <button class="btn btn-secondary" onclick="loadHistory()">Refresh</button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -603,17 +603,17 @@
                         <thead>
                             <tr>
                                 <th>Session</th>
-                                <th>File</th>
+                                <th>Queue</th>
                                 <th>Agent</th>
-                                <th>Appelant</th>
-                                <th>Appelé</th>
-                                <th>Début</th>
-                                <th>Durée</th>
+                                <th>Caller</th>
+                                <th>Called</th>
+                                <th>Start</th>
+                                <th>Duration</th>
                             </tr>
                         </thead>
                         <tbody id="history-container">
                             <tr>
-                                <td colspan="7" class="empty-state">Cliquez sur "Actualiser" pour charger l'historique</td>
+                                <td colspan="7" class="empty-state">Click "Refresh" to load history</td>
                             </tr>
                         </tbody>
                     </table>
@@ -623,55 +623,25 @@
         
         <!-- Connect Tab -->
         <div id="connect-tab" class="tab-content">
-            <div class="grid-2">
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Connexion au serveur CCCP</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label>Serveur</label>
-                            <input type="text" id="server-host" value="10.199.30.67">
-                        </div>
-                        <div class="form-group">
-                            <label>Port</label>
-                            <select id="server-port">
-                                <option value="20101">20101 (Proxy)</option>
-                                <option value="20103">20103 (Dispatch)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Utilisateur</label>
-                            <input type="text" id="server-username" value="supervisor_gtri">
-                        </div>
-                        <div class="form-group">
-                            <label>Mot de passe</label>
-                            <input type="password" id="server-password" value="toto">
-                        </div>
-                        <button class="btn btn-primary" onclick="connectToServer()">
-                            Se connecter
-                        </button>
-                    </div>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Select Project</span>
+                    <button class="btn btn-secondary" onclick="loadServers()">Refresh</button>
                 </div>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Connexions actives</span>
+                <div class="card-body">
+                    <div class="form-group">
+                        <input type="text" id="project-search" placeholder="Search project..." style="width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; margin-bottom: 12px;" onkeyup="filterProjects()">
                     </div>
-                    <div class="card-body">
-                        <div id="connections-list">
-                            <div class="empty-state">
-                                <p>Aucune connexion active</p>
-                            </div>
-                        </div>
-                    </div>
+                    <select id="project-select" size="20" style="width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; padding: 8px; font-size: 13px; cursor: pointer;" onchange="selectProjectFromDropdown()">
+                        <option>Loading projects...</option>
+                    </select>
                 </div>
             </div>
         </div>
     </div>
     
     <div class="footer">
-        CCCP Explorer - Clone moderne de consistent_explorer.exe
+        CCCP Explorer - Real-time monitoring dashboard
     </div>
     
     <script>
@@ -710,7 +680,7 @@
         function renderUsers(users) {
             const tbody = document.getElementById('users-container');
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Aucun utilisateur trouvé</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No users found</td></tr>';
                 return;
             }
             
@@ -768,7 +738,7 @@
         function renderQueues(queues) {
             const tbody = document.getElementById('queues-container');
             if (queues.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucune queue trouvée</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No queues found</td></tr>';
                 return;
             }
             
@@ -809,7 +779,7 @@
         function renderHistory(history) {
             const tbody = document.getElementById('history-container');
             if (history.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Aucun appel dans l\'historique</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls in history</td></tr>';
                 return;
             }
             
@@ -847,7 +817,7 @@
                 
                 const tbody = document.getElementById('history-container');
                 if (history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Aucun appel dans l\'historique</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls in history</td></tr>';
                     return;
                 }
                 
@@ -873,81 +843,108 @@
                 window.open('/console?session=' + encodeURIComponent(sessionId), '_blank');
             }
         }
-        
-        // Connect to server
-        async function connectToServer() {
-            const host = document.getElementById('server-host').value;
-            const port = document.getElementById('server-port').value;
-            const username = document.getElementById('server-username').value;
-            const password = document.getElementById('server-password').value;
-            
+
+        // Load servers from MySQL
+        async function loadServers() {
             try {
-                const response = await fetch('/api/connect', {
+                const response = await fetch('/api/servers');
+                const servers = await response.json();
+                allServers = servers;
+                renderServers(servers);
+            } catch (e) {
+                console.error('Error loading servers:', e);
+                document.getElementById('project-select').innerHTML = '<option>Error loading projects</option>';
+            }
+        }
+
+        let allServers = [];
+
+        function renderServers(servers) {
+            const select = document.getElementById('project-select');
+            if (servers.length === 0) {
+                select.innerHTML = '<option>No projects found</option>';
+                return;
+            }
+
+            select.innerHTML = servers.map(server => `
+                <option value="${server.cccip}|${server.ccc_dispatch_port}|${server.project}">${server.project} - ${server.cccip}:${server.ccc_dispatch_port}</option>
+            `).join('');
+        }
+
+        function filterProjects() {
+            const search = document.getElementById('project-search').value.toLowerCase();
+            const filtered = allServers.filter(server => 
+                server.project.toLowerCase().includes(search) || 
+                server.cccip.includes(search)
+            );
+            renderServers(filtered);
+        }
+
+        function selectProjectFromDropdown() {
+            const select = document.getElementById('project-select');
+            const value = select.value;
+            if (!value || value.includes('Loading') || value.includes('Error') || value.includes('No projects')) {
+                return;
+            }
+            const [host, port, project] = value.split('|');
+            selectServer(host, parseInt(port), project);
+        }
+
+        // Select a server and update the dashboard
+        async function selectServer(host, port, project) {
+            try {
+                const response = await fetch('/api/select_server', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({host, port, username, password})
+                    body: JSON.stringify({host: host, port: port, project: project})
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
-                    updateConnectionsList();
-                    loadUsers();
-                    loadHistory();
+                    document.getElementById('current-server').textContent = `${data.project} - ${host}:${port}`;
+                    
+                    // Use data returned directly from API (no separate calls needed)
+                    allUsers = data.users || [];
+                    allQueues = data.queues || [];
+                    allHistory = data.history || [];
+                    
+                    document.getElementById('stat-users').textContent = allUsers.length;
+                    document.getElementById('stat-queues').textContent = allQueues.length;
+                    document.getElementById('stat-history').textContent = allHistory.length;
+                    document.getElementById('stat-last-update').textContent = data.last_update ? new Date(data.last_update).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+                    
+                    renderUsers(allUsers);
+                    renderQueues(allQueues);
+                    renderHistory(allHistory);
+                    
+                    // Switch to Users tab
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    document.querySelector('.tab[data-tab="users"]').classList.add('active');
+                    document.getElementById('users-tab').classList.add('active');
                 } else {
-                    alert('Échec de connexion: ' + (data.error || 'Erreur inconnue'));
+                    alert('Failed to select server: ' + (data.error || 'Unknown error'));
                 }
             } catch (e) {
-                console.error('Connection error:', e);
-                alert('Erreur de connexion: ' + e.message);
+                console.error('Error selecting server:', e);
+                alert('Error selecting server: ' + e.message);
             }
         }
-        
-        // Update connections list
-        async function updateConnectionsList() {
-            try {
-                const response = await fetch('/api/status');
-                const status = await response.json();
-                
-                const container = document.getElementById('connections-list');
-                if (Object.keys(status.clients || {}).length === 0) {
-                    container.innerHTML = '<div class="empty-state"><p>Aucune connexion active</p></div>';
-                    return;
-                }
-                
-                container.innerHTML = Object.entries(status.clients || {}).map(([name, client]) => `
-                    <div style="padding: 8px; border-bottom: 1px solid #21262d;">
-                        <strong>${name}</strong>: ${client.connected ? '✓ Connecté (' + client.session_id + ')' : '✗ Déconnecté'}
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Error updating connections:', e);
-            }
-        }
-        
+
         // Load data on page load
         document.addEventListener('DOMContentLoaded', () => {
             loadStatus();
             loadUsers();
             loadQueues();
             loadHistory();
-            // Auto-refresh every 30 seconds
+            loadServers();
+            // Auto-refresh every 3 seconds
             setInterval(() => {
                 loadStatus();
                 loadUsers();
                 loadQueues();
                 loadHistory();
-            }, 30000);
-        });
-        
-        // F5 to refresh all data
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'F5') {
-                e.preventDefault();
-                loadStatus();
-                loadUsers();
-                loadQueues();
-                loadHistory();
-            }
+            }, 3000);
         });
         
         async function loadStatus() {
@@ -957,7 +954,7 @@
                 if (status.last_update) {
                     const date = new Date(status.last_update);
                     document.getElementById('stat-last-update').textContent = 
-                        date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 }
             } catch (e) {
                 console.error('Error loading status:', e);

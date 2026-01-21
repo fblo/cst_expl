@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -371,24 +371,24 @@
         <h1>📊 CCCP Monitor</h1>
         <div class="server-info">
             <span id="server-ip">{{ ip }}</span>
-            <span id="status-badge" class="status-badge status-disconnected">Déconnecté</span>
+            <span id="status-badge" class="status-badge status-disconnected">Disconnected</span>
         </div>
     </div>
     
     <div class="container">
         <div class="controls">
             <div class="input-group">
-                <input type="text" id="server-input" placeholder="Adresse IP" value="{{ ip }}">
-                <button class="btn btn-primary" onclick="connectToServer()">🔗 Connecter</button>
+                <input type="text" id="server-input" placeholder="IP Address" value="{{ ip }}">
+                <button class="btn btn-primary" onclick="connectToServer()">🔗 Connect</button>
             </div>
-            <button class="btn btn-secondary" onclick="refreshData()">🔄 Rafraîchir</button>
+            <button class="btn btn-secondary" onclick="refreshData()">🔄 Refresh</button>
         </div>
         
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="icon">📁</div>
                 <div class="value" id="projects-count">0</div>
-                <div class="label">Projets</div>
+                <div class="label">Projects</div>
             </div>
             <div class="stat-card">
                 <div class="icon">📋</div>
@@ -398,30 +398,30 @@
             <div class="stat-card">
                 <div class="icon">👥</div>
                 <div class="value" id="users-count">0</div>
-                <div class="label">Utilisateurs</div>
+                <div class="label">Users</div>
             </div>
             <div class="stat-card">
                 <div class="icon">📞</div>
                 <div class="value" id="sessions-count">0</div>
-                <div class="label">Sessions Outbound</div>
+                <div class="label">Outbound Sessions</div>
             </div>
             <div class="stat-card">
                 <div class="icon">📡</div>
                 <div class="value" id="events-count">0</div>
-                <div class="label">Événements</div>
+                <div class="label">Events</div>
             </div>
         </div>
         
         <div class="main-grid">
-            <!-- Utilisateurs Panel -->
+            <!-- Users Panel -->
             <div class="panel">
                 <div class="panel-header">
-                    <span class="panel-title">👥 Utilisateurs Actifs</span>
+                    <span class="panel-title">👥 Active Users</span>
                     <span class="panel-badge" id="users-badge">0</span>
                 </div>
                 <div class="tabs">
-                    <button class="tab active" onclick="switchTab('users-tab', this)">En ligne</button>
-                    <button class="tab" onclick="switchTab('users-all-tab', this)">Tous</button>
+                    <button class="tab active" onclick="switchTab('users-tab', this)">Online</button>
+                    <button class="tab" onclick="switchTab('users-all-tab', this)">All</button>
                 </div>
                 <div id="users-tab" class="tab-content active">
                     <table class="data-table">
@@ -429,13 +429,13 @@
                             <tr>
                                 <th>Status</th>
                                 <th>Login</th>
-                                <th>Nom</th>
-                                <th>État</th>
-                                <th>Profil</th>
+                                <th>Name</th>
+                                <th>State</th>
+                                <th>Profile</th>
                             </tr>
                         </thead>
                         <tbody id="users-table">
-                            <tr><td colspan="5" style="text-align: center; color: #666;">Aucune donnée</td></tr>
+                            <tr><td colspan="5" style="text-align: center; color: #666;">No data</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -445,12 +445,12 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Login</th>
-                                <th>Nom</th>
-                                <th>Profil</th>
+                                <th>Name</th>
+                                <th>Profile</th>
                             </tr>
                         </thead>
                         <tbody id="users-all-table">
-                            <tr><td colspan="4" style="text-align: center; color: #666;">Aucune donnée</td></tr>
+                            <tr><td colspan="4" style="text-align: center; color: #666;">No data</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -466,14 +466,14 @@
                     <thead>
                         <tr>
                             <th>Queue</th>
-                            <th>Nom</th>
+                            <th>Name</th>
                             <th>Logged</th>
                             <th>Working</th>
                             <th>Latent</th>
                         </tr>
                     </thead>
                     <tbody id="queues-table">
-                        <tr><td colspan="5" style="text-align: center; color: #666;">Aucune donnée</td></tr>
+                        <tr><td colspan="5" style="text-align: center; color: #666;">No data</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -481,39 +481,39 @@
             <!-- Sessions Panel -->
             <div class="panel full-width">
                 <div class="panel-header">
-                    <span class="panel-title">📞 Sessions de Communication</span>
+                    <span class="panel-title">📞 Communication Sessions</span>
                     <span class="panel-badge" id="sessions-badge">0</span>
                 </div>
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>Session ID</th>
-                            <th>Utilisateur</th>
-                            <th>Profil</th>
+                            <th>User</th>
+                            <th>Profile</th>
                             <th>Type</th>
-                            <th>État</th>
+                            <th>State</th>
                         </tr>
                     </thead>
                     <tbody id="sessions-table">
-                        <tr><td colspan="5" style="text-align: center; color: #666;">Aucune session active</td></tr>
+                        <tr><td colspan="5" style="text-align: center; color: #666;">No active sessions</td></tr>
                     </tbody>
                 </table>
             </div>
             
-            <!-- Événements Panel -->
+            <!-- Events Panel -->
             <div class="panel full-width">
                 <div class="panel-header">
-                    <span class="panel-title">📡 Événements CCXML</span>
+                    <span class="panel-title">📡 CCXML Events</span>
                     <span class="panel-badge" id="events-badge">0</span>
                 </div>
                 <div id="events-container">
-                    <div style="text-align: center; color: #666;">Aucun événement</div>
+                    <div style="text-align: center; color: #666;">No events</div>
                 </div>
             </div>
         </div>
         
         <div class="last-update">
-            Dernière mise à jour: <span id="last-update">--</span>
+            Last update: <span id="last-update">--</span>
         </div>
     </div>
     
@@ -521,14 +521,14 @@
         const socket = io();
         let currentServer = '{{ ip }}';
         
-        // Connexion WebSocket
+        // WebSocket Connection
         socket.on('connect', function() {
-            console.log('Connecté au serveur WebSocket');
+            console.log('Connected to WebSocket server');
             updateStatus('connected');
         });
         
         socket.on('disconnect', function() {
-            console.log('Déconnecté du serveur WebSocket');
+            console.log('Disconnected from WebSocket server');
             updateStatus('disconnected');
         });
         
@@ -541,7 +541,7 @@
         });
         
         socket.on('data_update', function(data) {
-            console.log('Données mises à jour');
+            console.log('Data updated');
             updateDashboard(data);
         });
         
@@ -551,13 +551,13 @@
             
             if (status === 'connected') {
                 badge.classList.add('status-connected');
-                badge.textContent = 'Connecté';
+                badge.textContent = 'Connected';
             } else if (status === 'updating') {
                 badge.classList.add('status-updating');
-                badge.textContent = 'Mise à jour...';
+                badge.textContent = 'Updating...';
             } else {
                 badge.classList.add('status-disconnected');
-                badge.textContent = 'Déconnecté';
+                badge.textContent = 'Disconnected';
             }
         }
         
@@ -589,14 +589,14 @@
             
             // Last update
             if (data.last_update) {
-                document.getElementById('last-update').textContent = new Date(data.last_update).toLocaleString('fr-FR');
+                document.getElementById('last-update').textContent = new Date(data.last_update).toLocaleString('en-US');
             }
         }
         
         function updateUsersTable(users) {
             const tbody = document.getElementById('users-table');
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">Aucun utilisateur</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">No users</td></tr>';
                 return;
             }
             
@@ -614,7 +614,7 @@
         function updateQueuesTable(queues) {
             const tbody = document.getElementById('queues-table');
             if (queues.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">Aucune queue</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">No queues</td></tr>';
                 return;
             }
             
@@ -634,7 +634,7 @@
             const allSessions = [...sessions, ...outbound];
             
             if (allSessions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">Aucune session active</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666;">No active sessions</td></tr>';
                 return;
             }
             
@@ -652,13 +652,13 @@
         function updateEvents(events) {
             const container = document.getElementById('events-container');
             if (events.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: #666;">Aucun événement</div>';
+                container.innerHTML = '<div style="text-align: center; color: #666;">No events</div>';
                 return;
             }
             
             container.innerHTML = events.slice(0, 20).map(event => `
                 <div class="event-item">
-                    <span class="event-time">${new Date(event.timestamp).toLocaleTimeString('fr-FR')}</span>
+                    <span class="event-time">${new Date(event.timestamp).toLocaleTimeString('en-US')}</span>
                     <span class="event-name">${event.name || event.event_name || 'N/A'}</span>
                     <span class="event-type ${event.type || 'log'}">${event.type || 'event'}</span>
                     ${event.object ? '<br><small>' + JSON.stringify(event.object).substring(0, 100) + '</small>' : ''}

@@ -12,8 +12,9 @@ import time
 import json
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import List
 import logging
+import mysql.connector
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cccp")
@@ -36,6 +37,9 @@ class DashboardState:
         self.history: List[dict] = []
         self.last_update = datetime.now().isoformat()
         self.lock = threading.Lock()
+        self.current_host = "10.199.30.67"
+        self.current_port = 20103
+        self.current_project = ""
 
         self.refresh_thread = threading.Thread(target=self._auto_refresh, daemon=True)
         self.refresh_thread.start()
@@ -62,6 +66,9 @@ class DashboardState:
                 "users": self.users,
                 "queues": self.queues,
                 "history": self.history[-100:],
+                "current_host": self.current_host,
+                "current_port": self.current_port,
+                "current_project": self.current_project,
             }
 
     def add_event(self, event: dict):
@@ -74,8 +81,19 @@ class DashboardState:
     def _refresh_users(self):
         """Fetch users, calls, and queues from get_users_and_calls.py"""
         try:
+            with self.lock:
+                host = self.current_host
+                port = self.current_port
+
             result = subprocess.run(
-                ["python3", "get_users_and_calls.py"],
+                [
+                    "python3",
+                    "get_users_and_calls.py",
+                    "--host",
+                    host,
+                    "--port",
+                    str(port),
+                ],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -88,7 +106,7 @@ class DashboardState:
                     self.queues = data.get("queues", {}).get("all", [])
                     self.last_update = datetime.now().isoformat()
                     logger.info(
-                        f"Loaded {len(self.users)} users, {len(self.history)} calls, {len(self.queues)} queues"
+                        f"Loaded {len(self.users)} users, {len(self.history)} calls, {len(self.queues)} queues from {host}:{port}"
                     )
         except subprocess.TimeoutExpired:
             logger.error("Timeout fetching users/calls")
@@ -98,6 +116,43 @@ class DashboardState:
 
 # Global state instance
 state = DashboardState()
+
+MYSQL_CONFIG = {
+    "host": "vs-ics-prd-web-fr-505",
+    "user": "interactiv",
+    "password": "ics427!",
+    "database": None,
+    "charset": "utf8",
+    "collation": "utf8_general_ci",
+}
+
+
+def get_servers_from_mysql():
+    """Fetch servers from MySQL database"""
+    query = """
+        SELECT 
+            p.name AS project, 
+            v.cccip, 
+            g.ccc_dispatch_port, 
+            g.ccc_proxy_port
+        FROM 
+            interactivportal.Global_referential g
+        JOIN 
+            interactivportal.Projects p ON g.customer_id = p.id
+        JOIN 
+            interactivdbmaster.master_vocalnodes v ON g.cst_node = v.vocalnode
+    """
+    try:
+        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(query)
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return results
+    except Exception as e:
+        logger.error(f"MySQL error: {e}")
+        return []
 
 
 # =============================================================================
@@ -180,6 +235,49 @@ def api_history():
     return jsonify(state.history)
 
 
+@app.route("/api/servers")
+def api_servers():
+    """Get list of servers from MySQL"""
+    servers = get_servers_from_mysql()
+    return jsonify(servers)
+
+
+@app.route("/api/select_server", methods=["POST"])
+def api_select_server():
+    """Select a server and update the dashboard state, returns all data"""
+    data = request.json
+    host = data.get("host", "")
+    port = data.get("port", 20103)
+    project = data.get("project", "")
+
+    if not host:
+        return jsonify({"success": False, "error": "Host required"}), 400
+
+    with state.lock:
+        state.current_host = host
+        state.current_port = port
+        state.current_project = project
+
+    state._refresh_users()
+
+    with state.lock:
+        result = {
+            "success": True,
+            "host": host,
+            "port": port,
+            "project": project,
+            "users": state.users,
+            "queues": state.queues,
+            "history": state.history,
+            "last_update": state.last_update,
+        }
+
+    logger.info(
+        f"Selected server: {project} - {host}:{port}, loaded {len(state.users)} users, {len(state.queues)} queues, {len(state.history)} calls"
+    )
+    return jsonify(result)
+
+
 @app.route("/api/console/session", methods=["POST"])
 def api_console_session():
     """Execute console command for a specific session (like test_cst.sh)"""
@@ -205,8 +303,10 @@ def api_console_session():
         return line
 
     try:
-        # Execute the equivalent of test_cst.sh command
-        host = "10.199.30.67"
+        with state.lock:
+            host = state.current_host
+            port = state.current_port
+
         username = "admin"
         password = "admin"
 
@@ -222,7 +322,7 @@ def api_console_session():
             password,
             "-server",
             host,
-            "20103",
+            str(port),
             "-path",
             "/dispatch",
             "-field",
@@ -267,7 +367,7 @@ def api_console_session():
             password,
             "-server",
             host,
-            "20103",
+            str(port),
             "-path",
             "/dispatch",
             "-field",
