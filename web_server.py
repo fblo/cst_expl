@@ -12,7 +12,7 @@ import time
 import json
 import subprocess
 from datetime import datetime
-from typing import List
+from typing import Dict, List
 import logging
 import mysql.connector
 
@@ -37,9 +37,11 @@ class DashboardState:
         self.history: List[dict] = []
         self.last_update = datetime.now().isoformat()
         self.lock = threading.Lock()
-        self.current_host = "10.199.30.67"
+        self.current_host = ""
         self.current_port = 20103
         self.current_project = ""
+        self.has_project_selected = False
+        self.available_servers: Dict[str, dict] = {}
 
         self.refresh_thread = threading.Thread(target=self._auto_refresh, daemon=True)
         self.refresh_thread.start()
@@ -165,6 +167,34 @@ def index():
     with open("templates/modern_dashboard.html", "r") as f:
         content = f.read()
     return Response(content, mimetype="text/html")
+
+
+@app.route("/cst_explorer/<project_name>")
+def cst_explorer(project_name: str):
+    """Route for accessing a specific project directly"""
+    servers = get_servers_from_mysql()
+    state.available_servers = {s["project"]: s for s in servers}
+
+    server = state.available_servers.get(project_name)
+    if not server:
+        return f"Project '{project_name}' not found", 404
+
+    with state.lock:
+        state.current_host = server["cccip"]
+        state.current_port = server["ccc_dispatch_port"]
+        state.current_project = project_name
+        state.has_project_selected = True
+
+    state._refresh_users()
+
+    with open("templates/modern_dashboard.html", "r") as f:
+        content = f.read()
+
+    response = Response(content, mimetype="text/html")
+    response.headers["X-Project-Name"] = project_name
+    response.headers["X-Project-Host"] = state.current_host
+    response.headers["X-Project-Port"] = str(state.current_port)
+    return response
 
 
 @app.route("/session_console")
@@ -496,19 +526,16 @@ if __name__ == "__main__":
     print("=" * 70)
     print("CCCP Explorer - Live Dashboard")
     print("=" * 70)
-    print("Loading initial data...")
 
-    # Load data in parallel for faster startup
-    users_thread = threading.Thread(target=state._refresh_users)
+    print("Loading servers list from MySQL...")
+    servers = get_servers_from_mysql()
+    state.available_servers = {s["project"]: s for s in servers}
+    print(f"Loaded {len(servers)} projects")
 
-    users_thread.start()
-
-    users_thread.join()
-
-    print(f"Users loaded: {len(state.users)}")
-    print(f"History loaded: {len(state.history)}")
     print()
     print("Server running: http://localhost:5000")
+    print("  - Go to / for project selection")
+    print("  - Go to /cst_explorer/PROJECT_NAME to access a project directly")
     print("=" * 70)
 
     app.run(host="0.0.0.0", port=5000, debug=False)

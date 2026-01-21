@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CCCP Explorer - Modern Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
     <style>
         * {
             margin: 0;
@@ -669,9 +670,28 @@
             try {
                 const response = await fetch('/api/users');
                 const users = await response.json();
-                allUsers = users;
-                document.getElementById('stat-users').textContent = users.length;
-                renderUsers(users);
+                
+                // Filter out "consistent" user and sort by connected date (most recent first)
+                allUsers = users
+                    .filter(u => u.login !== 'consistent')
+                    .sort((a, b) => {
+                        const dateA = a.create_date_iso || '';
+                        const dateB = b.create_date_iso || '';
+                        return dateB.localeCompare(dateA);
+                    });
+                
+                document.getElementById('stat-users').textContent = allUsers.length;
+                
+                const projectElements = new Set();
+                allUsers.forEach(u => {
+                    if (u.project_name && u.project_name !== '-') {
+                        projectElements.add(u.project_name);
+                    }
+                });
+                const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
+                document.getElementById('stat-project').textContent = projectDisplay;
+                
+                renderUsers(allUsers);
             } catch (e) {
                 console.error('Error loading users:', e);
             }
@@ -763,19 +783,6 @@
             renderQueues(filtered);
         }
         
-        // Load history
-        async function loadHistory() {
-            try {
-                const response = await fetch('/api/history');
-                const history = await response.json();
-                allHistory = history;
-                document.getElementById('stat-history').textContent = history.length;
-                renderHistory(history);
-            } catch (e) {
-                console.error('Error loading history:', e);
-            }
-        }
-        
         function renderHistory(history) {
             const tbody = document.getElementById('history-container');
             if (history.length === 0) {
@@ -806,35 +813,6 @@
                        (call.called || '').toLowerCase().includes(search);
             });
             renderHistory(filtered);
-        }
-        
-        // Load history
-        async function loadHistory() {
-            try {
-                const response = await fetch('/api/history');
-                const history = await response.json();
-                document.getElementById('stat-history').textContent = history.length;
-                
-                const tbody = document.getElementById('history-container');
-                if (history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls in history</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = history.map(call => `
-                    <tr style="cursor: pointer;" onclick="openConsole('${call.session_id || ''}')">
-                        <td style="font-family: monospace; font-size: 11px;">${(call.session_id || '-').substring(0, 25)}</td>
-                        <td>${call.queue_name || '-'}</td>
-                        <td>${call.agent || '-'}</td>
-                        <td>${call.caller || '-'}</td>
-                        <td>${call.called || '-'}</td>
-                        <td>${call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
-                        <td>${call.duration || '-'}</td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                console.error('Error loading history:', e);
-            }
         }
         
         // Open console for a session
@@ -903,7 +881,6 @@
                 if (data.success) {
                     document.getElementById('current-server').textContent = `${data.project} - ${host}:${port}`;
                     
-                    // Use data returned directly from API (no separate calls needed)
                     allUsers = data.users || [];
                     allQueues = data.queues || [];
                     allHistory = data.history || [];
@@ -911,13 +888,14 @@
                     document.getElementById('stat-users').textContent = allUsers.length;
                     document.getElementById('stat-queues').textContent = allQueues.length;
                     document.getElementById('stat-history').textContent = allHistory.length;
-                    document.getElementById('stat-last-update').textContent = data.last_update ? new Date(data.last_update).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+                    document.getElementById('stat-last-update').textContent = data.last_update ? new Date(data.last_update).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--';
                     
                     renderUsers(allUsers);
                     renderQueues(allQueues);
                     renderHistory(allHistory);
                     
-                    // Switch to Users tab
+                    history.replaceState(null, '', `/cst_explorer/${encodeURIComponent(project)}`);
+                    
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                     document.querySelector('.tab[data-tab="users"]').classList.add('active');
@@ -931,22 +909,57 @@
             }
         }
 
+        // Check if we have a project loaded (from headers or URL)
+        function getProjectFromUrl() {
+            const path = window.location.pathname;
+            const match = path.match(/^\/cst_explorer\/(.+)$/);
+            return match ? decodeURIComponent(match[1]) : null;
+        }
+
         // Load data on page load
         document.addEventListener('DOMContentLoaded', () => {
-            loadStatus();
-            loadUsers();
-            loadQueues();
-            loadHistory();
-            loadServers();
-            // Auto-refresh every 3 seconds
+            const projectFromUrl = getProjectFromUrl();
+            
+            if (projectFromUrl) {
+                document.getElementById('current-server').textContent = 'Loading...';
+                loadServers().then(() => {
+                    const select = document.getElementById('project-select');
+                    const options = Array.from(select.options);
+                    const found = options.find(opt => opt.text.includes(projectFromUrl) || opt.value.includes(projectFromUrl));
+                    if (found) {
+                        select.value = found.value;
+                        selectProjectFromDropdown();
+                    } else {
+                        fetch('/api/servers')
+                            .then(r => r.json())
+                            .then(servers => {
+                                const server = servers.find(s => s.project === projectFromUrl);
+                                if (server) {
+                                    selectServer(server.cccip, server.ccc_dispatch_port, server.project);
+                                } else {
+                                    alert('Project not found: ' + projectFromUrl);
+                                }
+                            });
+                    }
+                });
+            } else {
+                loadServers();
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelector('.tab[data-tab="connect"]').classList.add('active');
+                document.getElementById('connect-tab').classList.add('active');
+            }
+            
             setInterval(() => {
-                loadStatus();
-                loadUsers();
-                loadQueues();
-                loadHistory();
+                if (window.location.pathname.startsWith('/cst_explorer/')) {
+                    loadStatus();
+                    loadUsers();
+                    loadQueues();
+                    loadHistory();
+                }
             }, 3000);
         });
-        
+
         async function loadStatus() {
             try {
                 const response = await fetch('/api/status');
@@ -958,30 +971,6 @@
                 }
             } catch (e) {
                 console.error('Error loading status:', e);
-            }
-        }
-        
-        // Load users and extract project name
-        async function loadUsers() {
-            try {
-                const response = await fetch('/api/users');
-                const users = await response.json();
-                allUsers = users;
-                document.getElementById('stat-users').textContent = users.length;
-                
-                // Extract and display project name
-                const projectElements = new Set();
-                users.forEach(u => {
-                    if (u.project_name && u.project_name !== '-') {
-                        projectElements.add(u.project_name);
-                    }
-                });
-                const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
-                document.getElementById('stat-project').textContent = projectDisplay;
-                
-                renderUsers(users);
-            } catch (e) {
-                console.error('Error loading users:', e);
             }
         }
     </script>
