@@ -290,6 +290,71 @@
             color: #ff7b72;
         }
         
+        .mode-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        
+        .mode-badge.supervisor {
+            background: #667eea44;
+            color: #a8a4ff;
+        }
+        
+        .mode-badge.agent {
+            background: #11998e44;
+            color: #69f0ae;
+        }
+        
+        .mode-badge.unplug {
+            background: #30363d44;
+            color: #8b949e;
+        }
+        
+        .mode-badge.interface {
+            background: #d2992244;
+            color: #d29922;
+        }
+        
+        .queue-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            background: #23863644;
+            color: #3fb950;
+        }
+        
+        .state-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .state-badge.state-supervision {
+            background: #23863644;
+            color: #3fb950;
+        }
+        
+        .state-badge.state-call {
+            background: #1f6feb44;
+            color: #58a6ff;
+        }
+        
+        .state-badge.state-unknown {
+            background: #30363d44;
+            color: #8b949e;
+        }
+        
         .queue-stat {
             display: inline-block;
             padding: 2px 8px;
@@ -426,6 +491,10 @@
     </div>
     
     <div class="stats-bar">
+        <div class="stat-item" style="flex: 1;">
+            <span class="stat-value" id="stat-project" style="font-size: 18px; color: #58a6ff;">-</span>
+            <span class="stat-label">Projet</span>
+        </div>
         <div class="stat-item">
             <span class="stat-value" id="stat-users">0</span>
             <span class="stat-label">Utilisateurs</span>
@@ -437,6 +506,10 @@
         <div class="stat-item">
             <span class="stat-value" id="stat-history">0</span>
             <span class="stat-label">Appels historiques</span>
+        </div>
+        <div class="stat-item" style="margin-left: auto; text-align: right;">
+            <span class="stat-value" id="stat-last-update" style="font-size: 14px;">--:--:--</span>
+            <span class="stat-label">Dernière MAJ</span>
         </div>
     </div>
     
@@ -452,8 +525,11 @@
         <div id="users-tab" class="tab-content active">
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Utilisateurs consistent</span>
-                    <button class="btn btn-secondary" onclick="loadUsers()">Actualiser</button>
+                    <span class="card-title">Utilisateurs CCCP</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="user-search" placeholder="Filtrer..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterUsers()">
+                        <button class="btn btn-secondary" onclick="loadUsers()">Actualiser</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <table class="table">
@@ -461,15 +537,18 @@
                             <tr>
                                 <th>Nom</th>
                                 <th>Login</th>
+                                <th>État</th>
                                 <th>Mode</th>
-                                <th>Queue</th>
+                                <th>Projet</th>
+                                <th>Téléphone</th>
+                                <th>Profil</th>
                                 <th>Connexion</th>
                                 <th>Durée</th>
                             </tr>
                         </thead>
                         <tbody id="users-container">
                             <tr>
-                                <td colspan="6" class="empty-state">Cliquez sur "Actualiser" pour charger les utilisateurs</td>
+                                <td colspan="9" class="empty-state">Cliquez sur "Actualiser" pour charger les utilisateurs</td>
                             </tr>
                         </tbody>
                     </table>
@@ -482,13 +561,18 @@
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Files d'attente</span>
-                    <button class="btn btn-secondary" onclick="loadQueues()">Actualiser</button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="queue-search" placeholder="Filtrer..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterQueues()">
+                        <button class="btn btn-secondary" onclick="loadQueues()">Actualiser</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <table class="table">
                         <thead>
                             <tr>
                                 <th>Queue</th>
+                                <th>Type</th>
+                                <th>Display Name</th>
                                 <th>Logged</th>
                                 <th>Working</th>
                                 <th>Waiting</th>
@@ -496,7 +580,7 @@
                         </thead>
                         <tbody id="queues-container">
                             <tr>
-                                <td colspan="4" class="empty-state">Cliquez sur "Actualiser" pour charger les queues</td>
+                                <td colspan="6" class="empty-state">Cliquez sur "Actualiser" pour charger les queues</td>
                             </tr>
                         </tbody>
                     </table>
@@ -509,7 +593,10 @@
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Historique des appels</span>
-                    <button class="btn btn-secondary" onclick="loadHistory()">Actualiser</button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="history-search" placeholder="Filtrer..." style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; width: 150px;" onkeyup="filterHistory()">
+                        <button class="btn btn-secondary" onclick="loadHistory()">Actualiser</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <table class="table">
@@ -584,8 +671,7 @@
     </div>
     
     <div class="footer">
-        CCCP Explorer - Clone moderne de consistent_explorer.exe<br>
-        Basé sur l'analyse reverse-engineering du binaire
+        CCCP Explorer - Clone moderne de consistent_explorer.exe
     </div>
     
     <script>
@@ -595,36 +681,75 @@
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
-                document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+                const tabContent = document.getElementById(tab.dataset.tab + '-tab');
+                tabContent.classList.add('active');
+                // Refresh queues when tab is clicked
+                if (tab.dataset.tab === 'queues') {
+                    loadQueues();
+                }
             });
         });
+        
+        let allUsers = [];
+        let allQueues = [];
+        let allHistory = [];
         
         // Load users
         async function loadUsers() {
             try {
                 const response = await fetch('/api/users');
                 const users = await response.json();
+                allUsers = users;
                 document.getElementById('stat-users').textContent = users.length;
-                
-                const tbody = document.getElementById('users-container');
-                if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucun utilisateur trouvé</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = users.map(user => `
-                    <tr>
-                        <td>${user.user_name || '-'}</td>
-                        <td>${user.login || '-'}</td>
-                        <td>${user.mode || '-'}</td>
-                        <td>${user.queue || '-'}</td>
-                        <td>${user.create_date_iso ? user.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
-                        <td>${user.duration || '-'}</td>
-                    </tr>
-                `).join('');
+                renderUsers(users);
             } catch (e) {
                 console.error('Error loading users:', e);
             }
+        }
+        
+        function renderUsers(users) {
+            const tbody = document.getElementById('users-container');
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Aucun utilisateur trouvé</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = users.map(user => {
+                const mode = user.mode || '-';
+                let modeClass = 'unplug';
+                if (mode.includes('supervisor')) modeClass = 'supervisor';
+                else if (mode.includes('agent')) modeClass = 'agent';
+                else if (mode.includes('interface')) modeClass = 'interface';
+                
+                const state = user.state || '-';
+                let stateClass = 'state-unknown';
+                if (state.toLowerCase().includes('supervision')) stateClass = 'state-supervision';
+                else if (state.toLowerCase().includes('appel')) stateClass = 'state-call';
+                
+                return `<tr>
+                    <td>${user.user_name || '-'}</td>
+                    <td>${user.login || '-'}</td>
+                    <td><span class="state-badge ${stateClass}">${state}</span></td>
+                    <td><span class="mode-badge ${modeClass}">${mode}</span></td>
+                    <td><span style="color: #8b949e; font-size: 11px;">${user.project_name || '-'}</span></td>
+                    <td style="font-family: monospace; font-size: 11px;">${user.phone_contact_uri && user.phone_contact_uri !== '-' ? user.phone_contact_uri.replace('tel:', '') : '-'}</td>
+                    <td><span style="color: #58a6ff; font-size: 11px;">${user.profile_name || '-'}</span></td>
+                    <td>${user.create_date_iso ? user.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
+                    <td>${user.duration || '-'}</td>
+                </tr>`;
+            }).join('');
+        }
+        
+        function filterUsers() {
+            const search = document.getElementById('user-search').value.toLowerCase();
+            const filtered = allUsers.filter(user => {
+                return (user.user_name || '').toLowerCase().includes(search) ||
+                       (user.login || '').toLowerCase().includes(search) ||
+                       (user.project_name || '').toLowerCase().includes(search) ||
+                       (user.profile_name || '').toLowerCase().includes(search) ||
+                       (user.mode || '').toLowerCase().includes(search);
+            });
+            renderUsers(filtered);
         }
         
         // Load queues
@@ -632,25 +757,85 @@
             try {
                 const response = await fetch('/api/queues');
                 const queues = await response.json();
+                allQueues = queues;
                 document.getElementById('stat-queues').textContent = queues.length;
-                
-                const tbody = document.getElementById('queues-container');
-                if (queues.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune queue trouvée</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = queues.map(queue => `
-                    <tr>
-                        <td>${queue.name || queue.display_name || '-'}</td>
-                        <td><span class="queue-stat logged">${queue.logged || 0}</span></td>
-                        <td><span class="queue-stat working">${queue.working || 0}</span></td>
-                        <td><span class="queue-stat waiting">${queue.waiting || 0}</span></td>
-                    </tr>
-                `).join('');
+                renderQueues(queues);
             } catch (e) {
                 console.error('Error loading queues:', e);
             }
+        }
+        
+        function renderQueues(queues) {
+            const tbody = document.getElementById('queues-container');
+            if (queues.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucune queue trouvée</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = queues.map(queue => `
+                <tr>
+                    <td><span class="queue-badge">${queue.name || '-'}</span></td>
+                    <td>${queue.type || '-'}</td>
+                    <td><span style="color: #8b949e; font-size: 11px;">${queue.display_name || '-'}</span></td>
+                    <td><span class="queue-stat logged">${queue.logged ?? 0}</span></td>
+                    <td><span class="queue-stat working">${queue.working ?? 0}</span></td>
+                    <td><span class="queue-stat waiting">${queue.waiting ?? 0}</span></td>
+                </tr>
+            `).join('');
+        }
+        
+        function filterQueues() {
+            const search = document.getElementById('queue-search').value.toLowerCase();
+            const filtered = allQueues.filter(queue => {
+                return (queue.name || '').toLowerCase().includes(search) ||
+                       (queue.display_name || '').toLowerCase().includes(search);
+            });
+            renderQueues(filtered);
+        }
+        
+        // Load history
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const history = await response.json();
+                allHistory = history;
+                document.getElementById('stat-history').textContent = history.length;
+                renderHistory(history);
+            } catch (e) {
+                console.error('Error loading history:', e);
+            }
+        }
+        
+        function renderHistory(history) {
+            const tbody = document.getElementById('history-container');
+            if (history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Aucun appel dans l\'historique</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = history.map(call => `
+                <tr style="cursor: pointer;" onclick="openConsole('${call.session_id || ''}')">
+                    <td style="font-family: monospace; font-size: 11px;">${(call.session_id || '-').substring(0, 25)}</td>
+                    <td>${call.queue_name || '-'}</td>
+                    <td>${call.agent || '-'}</td>
+                    <td>${call.caller || '-'}</td>
+                    <td>${call.called || '-'}</td>
+                    <td>${call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
+                    <td>${call.duration || '-'}</td>
+                </tr>
+            `).join('');
+        }
+        
+        function filterHistory() {
+            const search = document.getElementById('history-search').value.toLowerCase();
+            const filtered = allHistory.filter(call => {
+                return (call.session_id || '').toLowerCase().includes(search) ||
+                       (call.queue_name || '').toLowerCase().includes(search) ||
+                       (call.agent || '').toLowerCase().includes(search) ||
+                       (call.caller || '').toLowerCase().includes(search) ||
+                       (call.called || '').toLowerCase().includes(search);
+            });
+            renderHistory(filtered);
         }
         
         // Load history
@@ -741,11 +926,67 @@
         
         // Load data on page load
         document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
             loadUsers();
+            loadQueues();
             loadHistory();
-            // Auto-refresh history every 5 seconds
-            setInterval(loadHistory, 5000);
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                loadStatus();
+                loadUsers();
+                loadQueues();
+                loadHistory();
+            }, 30000);
         });
+        
+        // F5 to refresh all data
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'F5') {
+                e.preventDefault();
+                loadStatus();
+                loadUsers();
+                loadQueues();
+                loadHistory();
+            }
+        });
+        
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                if (status.last_update) {
+                    const date = new Date(status.last_update);
+                    document.getElementById('stat-last-update').textContent = 
+                        date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+            } catch (e) {
+                console.error('Error loading status:', e);
+            }
+        }
+        
+        // Load users and extract project name
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const users = await response.json();
+                allUsers = users;
+                document.getElementById('stat-users').textContent = users.length;
+                
+                // Extract and display project name
+                const projectElements = new Set();
+                users.forEach(u => {
+                    if (u.project_name && u.project_name !== '-') {
+                        projectElements.add(u.project_name);
+                    }
+                });
+                const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
+                document.getElementById('stat-project').textContent = projectDisplay;
+                
+                renderUsers(users);
+            } catch (e) {
+                console.error('Error loading users:', e);
+            }
+        }
     </script>
 </body>
 </html>

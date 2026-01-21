@@ -53,6 +53,40 @@ def format_duration_seconds(seconds):
         return f"{hours}h {mins}m"
 
 
+def parse_active_queues(active_queues):
+    """Extract queue name from active_queues field"""
+    if not active_queues or active_queues == "undefined" or active_queues == "":
+        return "-"
+    try:
+        import re
+
+        queue_match = re.search(r"queue:'([^']+)'", active_queues)
+        if queue_match:
+            queue_name = queue_match.group(1)
+            if "__" in queue_name:
+                return queue_name.split("__", 1)[1]
+            return queue_name
+    except Exception:
+        pass
+    return "-"
+
+
+def parse_active_queues_state(active_queues):
+    """Extract state (task) from active_queues field"""
+    if not active_queues or active_queues == "undefined" or active_queues == "":
+        return "-"
+    try:
+        import re
+
+        task_match = re.search(r"task:'([^']+)'", active_queues)
+        if task_match:
+            task = task_match.group(1)
+            return task.capitalize()
+    except Exception:
+        pass
+    return "-"
+
+
 def get_user_real_names():
     """Récupère les vrais noms d'utilisateurs depuis dispatch avec tous les champs"""
     try:
@@ -69,12 +103,12 @@ def get_user_real_names():
                 "-list",
                 "-path",
                 "/dispatch",
-                "-field",
-                "sessions",
                 "-filter",
                 ".[session_type eq 3 and terminate_date eq '']",
+                "-field",
+                "sessions",
                 "-fields",
-                "row.object_id;row.user.name;row.user.login;row.current_mode;row.create_date;row.terminate_date",
+                "row.object_id;row.project_name;row.user.login;row.user.name;row.phone_contact_uri;row.login_date;row.profile_name;row.current_mode;row.states.last.display_name;row.session_id;row.session_type;row.create_date;row.terminate_date",
                 "-separator",
                 "|",
             ],
@@ -88,29 +122,51 @@ def get_user_real_names():
             if not line or "|" not in line:
                 continue
             parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 6:
-                object_id = parts[0]
-                user_name = parts[1] if parts[1] != "undefined" else "-"
+            if len(parts) >= 14:
+                object_id = parts[0] if parts[0] != "undefined" else "-"
+                project_name = parts[1] if parts[1] != "undefined" else "-"
                 login = parts[2] if parts[2] != "undefined" else "-"
-                mode = parts[3] if parts[3] != "undefined" else "-"
-                create_date = parts[4]
-                terminate_date = parts[5]
+                user_name = parts[3] if parts[3] != "undefined" else "-"
+                phone_contact_uri = parts[4] if parts[4] != "undefined" else "-"
+                login_date = parts[5]
+                profile_name = (
+                    parts[6] if len(parts) > 6 and parts[6] != "undefined" else "-"
+                )
+                current_mode = (
+                    parts[7] if len(parts) > 7 and parts[7] != "undefined" else "-"
+                )
+                state_display_name = (
+                    parts[8] if len(parts) > 8 and parts[8] != "undefined" else "-"
+                )
+                session_id = (
+                    parts[9] if len(parts) > 9 and parts[9] != "undefined" else "-"
+                )
+                session_type = (
+                    parts[10] if len(parts) > 10 and parts[10] != "undefined" else "-"
+                )
+                create_date = parts[11]
+                terminate_date = parts[12]
 
-                if object_id and object_id != "undefined":
-                    start_dt = parse_french_datetime(create_date)
+                if login and login != "undefined":
+                    start_dt = parse_french_datetime(login_date)
                     if start_dt:
                         duration_secs = int((datetime.now() - start_dt).total_seconds())
                         duration = format_duration_seconds(duration_secs)
                     else:
                         duration = "-"
 
-                    users_map[object_id] = {
+                    users_map[login] = {
+                        "login": login,
                         "object_id": object_id,
                         "user_name": user_name,
-                        "login": login,
-                        "mode": mode,
-                        "position": "-",
-                        "queue": "-",
+                        "project_name": project_name,
+                        "phone_contact_uri": phone_contact_uri,
+                        "profile_name": profile_name,
+                        "mode": current_mode,
+                        "state": state_display_name,
+                        "session_id": session_id,
+                        "session_type": session_type,
+                        "login_date": login_date,
                         "create_date": create_date,
                         "create_date_iso": format_datetime_iso(start_dt)
                         if start_dt
@@ -125,7 +181,6 @@ def get_user_real_names():
                         "is_active": True,
                     }
 
-        # Filtrer pour ne garder que les utilisateurs avec un vrai nom
         real_users_map = {
             k: v
             for k, v in users_map.items()
@@ -161,7 +216,7 @@ def get_ccxml_sessions():
         "-field",
         "sessions",
         "-fields",
-        "row.object_id;row.session_id;row.create_date;row.terminate_date",
+        "row.object_id;row.session_id;row.create_date;row.terminate_date;row.active_queues",
         "-separator",
         "|",
     ]
@@ -182,6 +237,7 @@ def get_ccxml_sessions():
                 session_id = parts[1]
                 create_date = parts[2]
                 terminate_date = parts[3]
+                active_queues = parts[4]
 
                 if not object_id or object_id == "undefined":
                     continue
@@ -198,6 +254,7 @@ def get_ccxml_sessions():
                             "user_id": base_name,
                             "create_date": create_date,
                             "terminate_date": terminate_date,
+                            "active_queues": active_queues,
                         }
                     )
 
@@ -340,49 +397,44 @@ def get_all_data():
         file=sys.stderr,
     )
 
-    enriched_users = []
-    for user in ccxml_users:
-        obj_id = user.get("object_id", "")
-        if obj_id in dispatch_users:
-            disp_user = dispatch_users[obj_id]
-            user["user_name"] = disp_user.get("user_name", "-")
-            user["login"] = disp_user.get("login", "-")
-            user["mode"] = disp_user.get("mode", "-")
-            user["position"] = disp_user.get("position", "-")
-            user["queue"] = disp_user.get("queue", "-")
-            user["create_date"] = disp_user.get(
-                "create_date", user.get("create_date", "-")
-            )
-            user["create_date_iso"] = disp_user.get(
-                "create_date_iso", user.get("create_date_iso", "")
-            )
+    ccxml_object_to_queues = {}
+    for ccxml_user in ccxml_users:
+        obj_id = ccxml_user.get("object_id", "")
+        if obj_id and ccxml_user.get("active_queues"):
+            ccxml_object_to_queues[obj_id] = ccxml_user.get("active_queues", "")
 
-            start_dt = parse_french_datetime(user.get("create_date", ""))
-            if start_dt:
-                terminate_date = user.get("terminate_date", "")
-                if terminate_date and terminate_date != "undefined":
-                    end_dt = parse_french_datetime(terminate_date)
-                    duration_secs = int((end_dt - start_dt).total_seconds())
-                else:
-                    duration_secs = int((datetime.now() - start_dt).total_seconds())
-                user["duration"] = format_duration_seconds(duration_secs)
-                user["duration_seconds"] = duration_secs
-                user["is_active"] = not terminate_date or terminate_date == "undefined"
-            else:
-                user["duration"] = "-"
-                user["duration_seconds"] = 0
-                user["is_active"] = True
+    active_users = []
 
-        enriched_users.append(user)
+    for login, disp_user in dispatch_users.items():
+        user = {
+            "login": login,
+            "object_id": disp_user.get("object_id", "-"),
+            "user_name": disp_user.get("user_name", "-"),
+            "project_name": disp_user.get("project_name", "-"),
+            "phone_contact_uri": disp_user.get("phone_contact_uri", "-"),
+            "profile_name": disp_user.get("profile_name", "-"),
+            "mode": disp_user.get("mode", "-"),
+            "state": disp_user.get("state", "-"),
+            "session_id": disp_user.get("session_id", "-"),
+            "session_type": disp_user.get("session_type", "-"),
+            "queue": "-",
+            "create_date": disp_user.get("create_date", "-"),
+            "create_date_iso": disp_user.get("create_date_iso", "-"),
+            "duration": disp_user.get("duration", "-"),
+            "duration_seconds": disp_user.get("duration_seconds", 0),
+            "is_active": disp_user.get("is_active", True),
+        }
 
-    active_users = [
-        u
-        for u in enriched_users
-        if u.get("is_active", True)
-        and u.get("user_name")
-        and u.get("user_name") != "-"
-        and u.get("user_name") != "None"
-    ]
+        active_queues = ccxml_object_to_queues.get(disp_user.get("object_id", ""), "")
+        if active_queues and active_queues != "undefined":
+            user["active_queues"] = active_queues
+            user["queue"] = parse_active_queues(active_queues)
+            # Set queue to "-" if user is in unplug mode
+            if "unplug" in (disp_user.get("mode", "").lower()):
+                user["queue"] = "-"
+
+        active_users.append(user)
+
     active_users.sort(key=lambda x: x.get("duration_seconds", 0), reverse=True)
 
     for call in ccxml_calls:
@@ -403,6 +455,8 @@ def get_all_data():
 
     ccxml_calls.sort(key=lambda x: x.get("create_date_iso", ""), reverse=True)
 
+    queues = get_queue_statistics(active_users)
+
     result = {
         "connected": True,
         "timestamp": datetime.now().isoformat(),
@@ -412,14 +466,112 @@ def get_all_data():
             "all": active_users,
         },
         "calls": {"count": len(ccxml_calls), "all": ccxml_calls},
+        "queues": {"count": len(queues), "all": queues},
     }
 
     print(
-        f"Total - Utilisateurs actifs: {len(active_users)}, Appels: {len(ccxml_calls)}",
+        f"Total - Utilisateurs actifs: {len(active_users)}, Appels: {len(ccxml_calls)}, Queues: {len(queues)}",
         file=sys.stderr,
     )
 
     return result
+
+
+def get_queue_statistics(active_users=None):
+    """Récupère les queues et leurs statistiques depuis dispatch"""
+    queues_cmd = [
+        "/opt/consistent/bin/ccenter_report",
+        "-login",
+        "admin",
+        "-password",
+        "admin",
+        "-server",
+        DEFAULT_IP,
+        str(DISPATCH_PORT),
+        "-list",
+        "-path",
+        "/dispatch",
+        "-field",
+        "queues",
+        "-fields",
+        "row.object_id;row.name;row.queue_type;row.display_name;row.priority;row.logged;row.working;row.waiting",
+        "-separator",
+        "|",
+    ]
+
+    def clean_queue_name(name):
+        """Remove everything before '__' and the double underscore"""
+        if "__" in name:
+            return name.split("__", 1)[1]
+        return name
+
+    try:
+        queues_result = subprocess.run(
+            queues_cmd, capture_output=True, text=True, timeout=30
+        )
+
+        queues = []
+
+        for line in queues_result.stdout.strip().split("\n"):
+            if not line or "|" not in line:
+                continue
+
+            parts = line.split("|")
+            if len(parts) >= 8:
+                object_id = parts[0].strip() if parts[0] else ""
+                name = parts[1].strip() if len(parts) > 1 and parts[1] else ""
+                queue_type = parts[2].strip() if len(parts) > 2 and parts[2] else ""
+                display_name = parts[3].strip() if len(parts) > 3 and parts[3] else ""
+                priority = parts[4].strip() if len(parts) > 4 and parts[4] else ""
+                logged = parts[5].strip() if len(parts) > 5 and parts[5] else ""
+                working = parts[6].strip() if len(parts) > 6 and parts[6] else ""
+                waiting = parts[7].strip() if len(parts) > 7 and parts[7] else ""
+
+                if not name or name == "undefined":
+                    continue
+
+                if not name.startswith("Q_"):
+                    continue
+
+                clean_name = clean_queue_name(name)
+
+                logged_count = 0
+                if active_users:
+                    logged_count = sum(
+                        1
+                        for u in active_users
+                        if u.get("queue", "") == clean_name
+                        and "unplug" not in (u.get("mode", "").lower())
+                    )
+
+                queues.append(
+                    {
+                        "name": clean_name,
+                        "object_id": object_id,
+                        "type": queue_type
+                        if queue_type and queue_type != "undefined"
+                        else "queue",
+                        "display_name": display_name
+                        if display_name and display_name != "undefined"
+                        else clean_name,
+                        "priority": priority
+                        if priority and priority != "undefined"
+                        else "-",
+                        "logged": logged_count,
+                        "working": int(working) if working and working.isdigit() else 0,
+                        "waiting": int(waiting) if waiting and waiting.isdigit() else 0,
+                    }
+                )
+
+        print(
+            f"Queues recuperees: {len(queues)}",
+            file=sys.stderr,
+        )
+        return queues
+
+    except Exception as e:
+        print(f"Erreur recuperation queues: {e}", file=sys.stderr)
+    return []
 
 
 if __name__ == "__main__":

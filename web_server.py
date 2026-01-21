@@ -18,7 +18,10 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cccp")
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
+app.jinja_env.auto_reload = True
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["JINJA2_CACHE_DISABLED"] = True
 CORS(app)
 
 
@@ -42,7 +45,6 @@ class DashboardState:
         while True:
             try:
                 self._refresh_users()
-                self._refresh_history()
             except Exception as e:
                 logger.error(f"Auto-refresh error: {e}")
             time.sleep(30)
@@ -70,7 +72,7 @@ class DashboardState:
                 self.all_events = self.all_events[-500:]
 
     def _refresh_users(self):
-        """Fetch users and calls from get_users_and_calls.py"""
+        """Fetch users, calls, and queues from get_users_and_calls.py"""
         try:
             result = subprocess.run(
                 ["python3", "get_users_and_calls.py"],
@@ -83,33 +85,15 @@ class DashboardState:
                 with self.lock:
                     self.users = data.get("users", {}).get("all", [])
                     self.history = data.get("calls", {}).get("all", [])
+                    self.queues = data.get("queues", {}).get("all", [])
                     self.last_update = datetime.now().isoformat()
                     logger.info(
-                        f"Loaded {len(self.users)} users, {len(self.history)} calls"
+                        f"Loaded {len(self.users)} users, {len(self.history)} calls, {len(self.queues)} queues"
                     )
         except subprocess.TimeoutExpired:
             logger.error("Timeout fetching users/calls")
         except Exception as e:
             logger.error(f"Error fetching users/calls: {e}")
-
-    def _refresh_history(self):
-        """Fetch call history"""
-        try:
-            result = subprocess.run(
-                ["python3", "get_mapped_history.py"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                data = json.loads(result.stdout)
-                with self.lock:
-                    self.history = data.get("calls", [])
-                    logger.info(f"Loaded {len(self.history)} history records")
-        except subprocess.TimeoutExpired:
-            logger.error("Timeout fetching history")
-        except Exception as e:
-            logger.error(f"Error fetching history: {e}")
 
 
 # Global state instance
@@ -123,8 +107,9 @@ state = DashboardState()
 
 @app.route("/")
 def index():
-    """Main dashboard"""
-    return render_template("modern_dashboard.html")
+    with open("templates/modern_dashboard.html", "r") as f:
+        content = f.read()
+    return Response(content, mimetype="text/html")
 
 
 @app.route("/session_console")
@@ -415,13 +400,10 @@ if __name__ == "__main__":
 
     # Load data in parallel for faster startup
     users_thread = threading.Thread(target=state._refresh_users)
-    history_thread = threading.Thread(target=state._refresh_history)
 
     users_thread.start()
-    history_thread.start()
 
     users_thread.join()
-    history_thread.join()
 
     print(f"Users loaded: {len(state.users)}")
     print(f"History loaded: {len(state.history)}")
