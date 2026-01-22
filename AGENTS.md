@@ -17,4 +17,3 @@ ruff check . && ruff format .    # Lint and format code
 - **Logging**: `logger = logging.getLogger("cccp")`, use INFO/DEBUG/ERROR levels appropriately
 - **Threading**: Use threading.Lock() for shared state, daemon threads for background tasks
 - **Documentation**: Docstrings for all public classes/functions, explain params and return values
-```

@@ -169,6 +169,14 @@ def index():
     return Response(content, mimetype="text/html")
 
 
+@app.route("/light")
+def index_light():
+    """Light theme version of the dashboard"""
+    with open("templates/modern_dashboard_light.html", "r") as f:
+        content = f.read()
+    return Response(content, mimetype="text/html")
+
+
 @app.route("/cst_explorer/<project_name>")
 def cst_explorer(project_name: str):
     """Route for accessing a specific project directly"""
@@ -197,6 +205,34 @@ def cst_explorer(project_name: str):
     return response
 
 
+@app.route("/cst_explorer_light/<project_name>")
+def cst_explorer_light(project_name: str):
+    """Route for accessing a specific project directly with light theme"""
+    servers = get_servers_from_mysql()
+    state.available_servers = {s["project"]: s for s in servers}
+
+    server = state.available_servers.get(project_name)
+    if not server:
+        return f"Project '{project_name}' not found", 404
+
+    with state.lock:
+        state.current_host = server["cccip"]
+        state.current_port = server["ccc_dispatch_port"]
+        state.current_project = project_name
+        state.has_project_selected = True
+
+    state._refresh_users()
+
+    with open("templates/modern_dashboard_light.html", "r") as f:
+        content = f.read()
+
+    response = Response(content, mimetype="text/html")
+    response.headers["X-Project-Name"] = project_name
+    response.headers["X-Project-Host"] = state.current_host
+    response.headers["X-Project-Port"] = str(state.current_port)
+    return response
+
+
 @app.route("/session_console")
 def session_console():
     """Dedicated session console page"""
@@ -207,6 +243,12 @@ def session_console():
 def console_minimal():
     """Minimal console page"""
     return render_template("console_minimal.html")
+
+
+@app.route("/console_light")
+def console_minimal_light():
+    """Light theme console page"""
+    return render_template("console_minimal_light.html")
 
 
 @app.route("/api/status")

@@ -295,7 +295,7 @@ def get_ccxml_sessions(host=DEFAULT_IP, port=DISPATCH_PORT):
 
 
 def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
-    """Récupère les détails des appels depuis dispatch"""
+    """Récupère les détails des appels depuis dispatch (TOUTES les sessions)"""
     cmd = [
         "/opt/consistent/bin/ccenter_report",
         "-login",
@@ -310,10 +310,8 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
         "/dispatch",
         "-field",
         "sessions",
-        "-filter",
-        ".[session_type eq 1]",
         "-fields",
-        "row.session_id;row.object_id;row.create_date;row.terminate_date;row.queue_name;row.tasks.last.manager_user_id;row.connections.first.remote_address;row.connections.last.local_address",
+        "row.session_id;row.object_id;row.create_date;row.terminate_date;row.session_type;row.queue_name;row.tasks.last.queue_name;row.tasks.last.manager_user_id;row.connections.first.remote_address;row.connections.last.local_address",
         "-separator",
         "|",
     ]
@@ -321,43 +319,41 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
-        calls_map = {}
+        session_to_info = {}
         for line in result.stdout.strip().split("\n"):
             if not line or "|" not in line:
                 continue
 
             parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 8:
+
+            if len(parts) >= 10:
                 session_id = parts[0]
                 object_id = parts[1]
                 create_date = parts[2]
                 terminate_date = parts[3]
-                queue_name = parts[4]
-                agent = parts[5]
-                remote = parts[6]  # Caller (qui appelle)
-                local = parts[7]  # Called (numéro appelé)
+                session_type = parts[4]
+                queue_name = parts[5] if parts[5] != "undefined" else ""
+                queue_name_alt = (
+                    parts[6] if len(parts) > 6 and parts[6] != "undefined" else ""
+                )
+                agent = parts[7] if len(parts) > 7 and parts[7] != "undefined" else ""
+                remote = parts[8] if len(parts) > 8 else ""
+                local = parts[9] if len(parts) > 9 else ""
 
-                if object_id == "undefined":
+                if not queue_name:
+                    queue_name = queue_name_alt
+
+                if object_id == "undefined" or not object_id:
                     continue
 
-                # Extract call_id from session_id
-                call_id = (
-                    session_id.split("@")[0].replace("session_", "")
-                    if "@" in session_id
-                    else ""
-                )
-
-                # Caller - who is calling
                 caller = ""
                 if remote and remote != "undefined":
                     caller = remote.replace("sip:", "").split("@")[0]
 
-                # Called - the target number
                 called = ""
                 if local and local != "undefined":
                     called = local.replace("sip:", "").split("@")[0]
 
-                # Calculate duration
                 duration = "-"
                 start_dt = parse_french_datetime(create_date)
                 if start_dt and terminate_date and terminate_date != "undefined":
@@ -366,26 +362,19 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
                         duration_secs = int((end_dt - start_dt).total_seconds())
                         duration = format_duration_seconds(duration_secs)
 
-                calls_map[object_id] = {
-                    "call_id": call_id,
-                    "session_id": session_id,
-                    "queue_name": queue_name
-                    if queue_name and queue_name != "undefined"
-                    else "-",
-                    "agent": agent if agent and agent != "undefined" else "-",
-                    "caller": caller,  # Qui appelle
-                    "called": called,  # Numéro appelé
+                session_to_info[session_id] = {
+                    "object_id": object_id,
+                    "session_type": session_type,
+                    "queue_name": queue_name if queue_name else "-",
+                    "agent": agent if agent else "-",
+                    "caller": caller,
+                    "called": called,
                     "duration": duration,
                     "create_date": create_date,
                     "create_date_iso": format_datetime_iso(start_dt),
                 }
-                print(
-                    f"Appel {call_id}: caller={caller}, called={called}",
-                    file=sys.stderr,
-                )
 
-        print(f"Total appels dispatch: {len(calls_map)}", file=sys.stderr)
-        return calls_map
+        return session_to_info
 
     except Exception as e:
         print(f"Erreur Dispatch: {e}", file=sys.stderr)
@@ -451,9 +440,10 @@ def get_all_data(host=DEFAULT_IP, port=DISPATCH_PORT):
     active_users.sort(key=lambda x: x.get("duration_seconds", 0), reverse=True)
 
     for call in ccxml_calls:
-        obj_id = call.get("object_id", "")
-        if obj_id in dispatch_calls:
-            disp_data = dispatch_calls[obj_id]
+        session_id = call.get("session_id", "")
+        if session_id in dispatch_calls:
+            disp_data = dispatch_calls[session_id]
+            call["object_id"] = disp_data.get("object_id", call.get("object_id", ""))
             call["queue_name"] = disp_data.get("queue_name", "-")
             call["agent"] = disp_data.get("agent", "-")
             call["caller"] = disp_data.get("caller", "-")

@@ -6,6 +6,50 @@
     <title>CCCP Explorer - Modern Dashboard</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
     <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f6f8fa;
+            --bg-tertiary: #edeff1;
+            --border-color: #d0d7de;
+            --text-primary: #24292f;
+            --text-secondary: #57606a;
+            --text-muted: #8b949e;
+            --accent-color: #0969da;
+            --accent-hover: #0550ae;
+            --success-bg: #dafbe1;
+            --success-color: #1a7f37;
+            --warning-bg: #fff8c5;
+            --warning-color: #9a6700;
+            --error-bg: #ffebe9;
+            --error-color: #cf222e;
+            --purple-bg: #f3d8ff;
+            --purple-color: #8250df;
+            --card-bg: #ffffff;
+            --input-bg: #f6f8fa;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-color: #58a6ff;
+            --accent-hover: #79c0ff;
+            --success-bg: #23863644;
+            --success-color: #3fb950;
+            --warning-bg: #d2992244;
+            --warning-color: #d29922;
+            --error-bg: #da363344;
+            --error-color: #f85149;
+            --purple-bg: #a371f744;
+            --purple-color: #cba6f7;
+            --card-bg: #161b22;
+            --input-bg: #0d1117;
+        }
+        
         * {
             margin: 0;
             padding: 0;
@@ -21,7 +65,7 @@
         }
         
         .header {
-            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
             padding: 16px 24px;
             display: flex;
@@ -31,6 +75,12 @@
             top: 0;
             z-index: 100;
             transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
         }
         
         .header h1 {
@@ -46,6 +96,43 @@
         .header h1::before {
             content: '🔗';
             font-size: 24px;
+        }
+        
+        .theme-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .theme-selector label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .theme-selector select {
+            padding: 6px 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .theme-selector select:hover {
+            border-color: var(--accent-color);
+        }
+        
+        .theme-selector select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
+        }
+        
+        .header-info {
+            font-size: 12px;
+            color: var(--text-secondary);
         }
         
         .stats-bar {
@@ -264,14 +351,14 @@
         
         .user-badge.supervisor {
             background: linear-gradient(135deg, #667eea22, #764ba222);
-            color: #a8a4ff;
+            color: #667eea;
             border: 1px solid #667eea44;
         }
         
         .user-badge.agent {
-            background: linear-gradient(135deg, #11998e22, #38ef7d22);
-            color: #69f0ae;
-            border: 1px solid #11998e44;
+            background: #dafbe1;
+            color: #1a7f37;
+            border: 1px solid #1a7f3744;
         }
         
         .state-badge {
@@ -311,13 +398,13 @@
         }
         
         .mode-badge.supervisor {
-            background: #667eea44;
-            color: #a8a4ff;
+            background: #f3d8ff;
+            color: #8250df;
         }
         
         .mode-badge.agent {
-            background: #11998e44;
-            color: #69f0ae;
+            background: #dafbe1;
+            color: #1a7f37;
         }
         
         .mode-badge.unplug {
@@ -339,31 +426,6 @@
             font-size: 11px;
             background: var(--success-bg);
             color: var(--success-color);
-        }
-        
-        .state-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        
-        .state-badge.state-supervision {
-            background: var(--success-bg);
-            color: var(--success-color);
-        }
-        
-        .state-badge.state-call {
-            background: #e0f2ff;
-            color: #0550ae;
-        }
-        
-        .state-badge.state-unknown {
-            background: var(--bg-tertiary);
-            color: var(--text-muted);
         }
         
         .queue-stat {
@@ -550,95 +612,26 @@
             font-size: 12px;
             color: var(--text-muted);
         }
-
-        .theme-selector {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .theme-selector label {
-            font-size: 13px;
-            color: #8b949e;
-        }
-
-        .theme-selector select {
-            padding: 6px 12px;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            color: #c9d1d9;
-            font-size: 13px;
-            cursor: pointer;
-        }
-
-        .theme-selector select:hover {
-            border-color: #58a6ff;
-        }
-
-        [data-theme="dark"] {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-tertiary: #21262d;
-            --border-color: #30363d;
-            --text-primary: #c9d1d9;
-            --text-secondary: #8b949e;
-            --text-muted: #6e7681;
-            --accent-color: #58a6ff;
-            --accent-hover: #79c0ff;
-            --success-bg: #23863644;
-            --success-color: #3fb950;
-            --warning-bg: #d2992244;
-            --warning-color: #d29922;
-            --error-bg: #da363344;
-            --error-color: #f85149;
-            --purple-bg: #a371f744;
-            --purple-color: #cba6f7;
-            --card-bg: #161b22;
-            --input-bg: #0d1117;
-        }
-
-        [data-theme="light"] {
-            --bg-primary: #ffffff;
-            --bg-secondary: #f6f8fa;
-            --bg-tertiary: #edeff1;
-            --border-color: #d0d7de;
-            --text-primary: #24292f;
-            --text-secondary: #57606a;
-            --text-muted: #8b949e;
-            --accent-color: #0969da;
-            --accent-hover: #0550ae;
-            --success-bg: #dafbe1;
-            --success-color: #1a7f37;
-            --warning-bg: #fff8c5;
-            --warning-color: #9a6700;
-            --error-bg: #ffebe9;
-            --error-color: #cf222e;
-            --purple-bg: #f3d8ff;
-            --purple-color: #8250df;
-            --card-bg: #ffffff;
-            --input-bg: #f6f8fa;
-        }
     </style>
 </head>
-<body data-theme="dark">
+<body>
     <div class="header">
-        <div style="display: flex; align-items: center; gap: 20px;">
+        <div class="header-left">
             <h1>CCCP Explorer</h1>
             <div class="theme-selector">
                 <label for="theme-select">Theme:</label>
                 <select id="theme-select" onchange="changeTheme()">
-                    <option value="dark">Dark</option>
                     <option value="light">Light</option>
+                    <option value="dark">Dark</option>
                 </select>
             </div>
         </div>
-        <div style="font-size: 12px; color: var(--text-muted);" id="current-server">Select a project</div>
+        <div class="header-info" id="current-server">Select a project</div>
     </div>
     
-        <div class="stats-bar">
+    <div class="stats-bar">
         <div class="stat-item" style="flex: 1;">
-            <span class="stat-value" id="stat-project" style="font-size: 18px; color: var(--accent-color);">-</span>
+            <span class="stat-value" id="stat-project" style="font-size: 18px;">-</span>
             <span class="stat-label">Project</span>
         </div>
         <div class="stat-item">
@@ -790,14 +783,14 @@
         function changeTheme() {
             const select = document.getElementById('theme-select');
             const theme = select.value;
-            document.body.setAttribute('data-theme', theme);
+            document.documentElement.setAttribute('data-theme', theme);
             localStorage.setItem('theme', theme);
         }
 
         function initTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            document.body.setAttribute('data-theme', savedTheme);
+            const savedTheme = localStorage.getItem('theme') || 'light';
             document.getElementById('theme-select').value = savedTheme;
+            document.documentElement.setAttribute('data-theme', savedTheme);
         }
 
         // Tab switching
@@ -808,7 +801,6 @@
                 tab.classList.add('active');
                 const tabContent = document.getElementById(tab.dataset.tab + '-tab');
                 tabContent.classList.add('active');
-                // Refresh queues when tab is clicked
                 if (tab.dataset.tab === 'queues') {
                     loadQueues();
                 }
@@ -819,13 +811,11 @@
         let allQueues = [];
         let allHistory = [];
         
-        // Load users
         async function loadUsers() {
             try {
                 const response = await fetch('/api/users');
                 const users = await response.json();
                 
-                // Filter out "consistent" user and sort by connected date (most recent first)
                 allUsers = users
                     .filter(u => u.login !== 'consistent')
                     .sort((a, b) => {
@@ -896,7 +886,6 @@
             renderUsers(filtered);
         }
         
-        // Load queues
         async function loadQueues() {
             try {
                 const response = await fetch('/api/queues');
@@ -981,16 +970,16 @@
             renderHistory(filtered);
         }
         
-        // Open console for a session
         function openConsole(sessionId) {
             if (sessionId) {
-                const theme = document.body.getAttribute('data-theme') || 'dark';
+                const theme = document.body.getAttribute('data-theme') || 'light';
                 const consoleUrl = theme === 'light' ? '/console_light' : '/console';
                 window.open(consoleUrl + '?session=' + encodeURIComponent(sessionId), '_blank');
             }
         }
-
-        // Load servers from MySQL
+        
+        let allServers = [];
+        
         async function loadServers() {
             try {
                 const response = await fetch('/api/servers');
@@ -1002,9 +991,7 @@
                 document.getElementById('project-select').innerHTML = '<option>Error loading projects</option>';
             }
         }
-
-        let allServers = [];
-
+        
         function renderServers(servers) {
             const container = document.getElementById('project-list');
             if (servers.length === 0) {
@@ -1021,7 +1008,7 @@
         }
 
         function filterProjects() {
-            const search = document.getElementById('project-search').value.toLowerCase();
+            const search = document.getElementById('project-search')?.value.toLowerCase() || '';
             const filtered = allServers.filter(server => 
                 server.project.toLowerCase().includes(search)
             );
@@ -1031,8 +1018,8 @@
         function selectProject(host, port, project) {
             selectServer(host, port, project);
         }
-
-        // Select a server and update the dashboard
+        }
+        
         async function selectServer(host, port, project) {
             try {
                 const response = await fetch('/api/select_server', {
@@ -1040,7 +1027,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({host: host, port: port, project: project})
                 });
-
+                
                 const data = await response.json();
                 if (data.success) {
                     document.getElementById('current-server').textContent = `${data.project} - ${host}:${port}`;
@@ -1072,17 +1059,16 @@
                 alert('Error selecting server: ' + e.message);
             }
         }
-
-        // Check if we have a project loaded (from headers or URL)
+        
         function getProjectFromUrl() {
             const path = window.location.pathname;
             const match = path.match(/^\/cst_explorer\/(.+)$/);
             return match ? decodeURIComponent(match[1]) : null;
         }
-
-        // Load data on page load
+        
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
+            
             const projectFromUrl = getProjectFromUrl();
             
             if (projectFromUrl) {
@@ -1124,7 +1110,7 @@
                 }
             }, 3000);
         });
-
+        
         async function loadStatus() {
             try {
                 const response = await fetch('/api/status');
