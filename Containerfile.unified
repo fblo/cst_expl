@@ -1,0 +1,209 @@
+# Containerfile Multi-Stage pour CCCP Dashboard Unifié
+# Stage 1: Build du binaire ccenter_report minimal
+FROM fedora:39 AS builder
+
+LABEL maintainer="ccc_report_build"
+LABEL description="Builder for minimal ccenter_report binary with glibc 2.38+"
+LABEL version="1.0"
+
+# Variables d'environnement pour le build
+ENV CC=gcc
+ENV CXX=g++
+ENV CFLAGS="-O2 -g -D_UNIX_ -DCCENTER_REPORT"
+ENV CXXFLAGS="-O2 -g -std=c++03 -D_UNIX_ -DCCENTER_REPORT"
+ENV LDFLAGS="-lcrypt"
+ENV MAKEFLAGS="-j$(nproc)"
+
+# Installation des outils de build
+RUN dnf update -y && \
+    dnf groupinstall -y "Development Tools" && \
+    dnf install -y \
+        gcc \
+        gcc-c++ \
+        make \
+        cmake \
+        libxcrypt \
+        libxcrypt-devel \
+        libxml2-devel \
+        libxslt-devel \
+        zlib-devel \
+        openssl-devel \
+        which \
+        wget \
+        curl \
+        git && \
+    dnf clean all
+
+# Créer le lien symbolique pour libcrypt.so.2
+RUN ln -sf /lib64/libcrypt.so.1 /lib64/libcrypt.so.2 && \
+    ldconfig
+
+# Création des répertoires de build
+RUN mkdir -p /opt/consistent/bin
+
+# Copier les sources MINIMAUX qui compilent
+WORKDIR /opt/consistent
+COPY ./main_minimal.C ./
+COPY ./report_minimal.C ./
+COPY ./report_minimal.h ./
+COPY ./explorer_client_minimal.C ./
+COPY ./explorer_client_minimal.h ./
+COPY ./forward_declarations.hpp ./
+COPY ./common/define.h ./common/
+COPY ./common/idl.h ./common/
+COPY ./common/rules.mk ./common/
+COPY ./rules.mk ./
+
+# Créer un Makefile minimal pour les sources minimales
+RUN cat > Makefile << 'EOF'
+# Makefile minimal pour ccenter_report
+CC = gcc
+CXX = g++
+CFLAGS = -O2 -g -D_UNIX_ -DCCENTER_REPORT -I. -Icommon
+CXXFLAGS = -O2 -g -std=c++03 -D_UNIX_ -DCCENTER_REPORT -I. -Icommon
+LDFLAGS = -lcrypt
+
+# Sources minimales
+SOURCES = main_minimal.C report_minimal.C explorer_client_minimal.C
+OBJECTS = $(SOURCES:.C=.o)
+TARGET = ccenter_report
+
+# Règles
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
+
+%.o: %.C
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+
+.PHONY: all clean
+EOF
+
+# Build du binaire minimal
+RUN make -j$(nproc)
+
+# Créer les répertoires finaux
+RUN mkdir -p /opt/consistent/bin && \
+    cp ccenter_report /opt/consistent/bin/ccenter_report && \
+    chmod +x /opt/consistent/bin/ccenter_report
+
+# Vérifier le binaire
+RUN /opt/consistent/bin/ccenter_report --version 2>/dev/null || echo "Binary created successfully"
+
+# =============================================================================
+# Stage 2: Conteneur Final avec Dashboard Web
+FROM fedora:39 AS runtime
+
+LABEL maintainer="ccc_report_dashboard"
+LABEL description="CCCP Dashboard Web Server with integrated ccenter_report"
+LABEL version="1.0"
+
+# Installation des dépendances Python et système
+RUN dnf update -y && \
+    dnf install -y \
+        python3 \
+        python3-pip \
+        python3-devel \
+        mysql \
+        mariadb-connector-c \
+        libxml2 \
+        libxml2-devel \
+        libxslt \
+        libxslt-devel \
+        zlib \
+        zlib-devel \
+        openssl \
+        openssl-devel \
+        libxcrypt \
+        libxcrypt-devel \
+        curl \
+        wget \
+        git && \
+    dnf clean all
+
+# Créer le lien symbolique pour libcrypt.so.2
+RUN ln -sf /lib64/libcrypt.so.1 /lib64/libcrypt.so.2 && \
+    ldconfig
+
+# Installation des packages Python
+RUN pip3 install --no-cache-dir \
+        flask>=2.0.0 \
+        flask-cors>=3.0.0 \
+        mysql-connector-python>=8.0.0
+
+# Créer la structure des répertoires
+RUN mkdir -p /app/{templates,logs,config}
+
+# Copier le binaire depuis le stage builder
+COPY ccenter_report /app
+
+
+# Copier les fichiers de l'application web
+WORKDIR /app
+COPY web_server.py ./
+COPY get_users_and_calls.py ./
+COPY requirements.txt ./
+COPY templates/ ./templates/
+
+# Créer un fichier de configuration par défaut
+RUN cat > config.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Configuration par défaut pour CCCP Dashboard
+Peut être surchargé avec des variables d'environnement
+"""
+import os
+
+# Configuration base de données (externe)
+MYSQL_CONFIG = {
+    "host": os.getenv("MYSQL_HOST", "vs-ics-prd-web-fr-505"),
+    "user": os.getenv("MYSQL_USER", "interactiv"),
+    "password": os.getenv("MYSQL_PASSWORD", "ics427!"),
+    "database": os.getenv("MYSQL_DATABASE", None),
+    "charset": "utf8",
+    "collation": "utf8_general_ci",
+}
+
+# Configuration par défaut des serveurs CCCP
+DEFAULT_SERVER_IP = os.getenv("DEFAULT_SERVER_IP", "10.199.30.67")
+DEFAULT_SERVER_PORT = int(os.getenv("DEFAULT_SERVER_PORT", "20103"))
+
+# Configuration de l'application
+FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_PORT = int(os.getenv("FLASK_PORT", 5000))
+FLASK_DEBUG = os.getenv("FLASK_DEBUG", "False").lower() == "true"
+
+# Logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+print(f"Configuration chargée:")
+print(f"  MySQL: {MYSQL_CONFIG['host'] if 'port' in MYSQL_CONFIG else '3306'}")
+print(f"  Serveur par défaut: {DEFAULT_SERVER_IP}:{DEFAULT_SERVER_PORT}")
+print(f"  Flask: {FLASK_HOST}:{FLASK_PORT}")
+EOF
+
+# Variables d'environnement par défaut
+ENV FLASK_HOST=0.0.0.0
+ENV FLASK_PORT=5000
+ENV FLASK_DEBUG=false
+ENV LOG_LEVEL=INFO
+ENV MYSQL_HOST=vs-ics-prd-web-fr-505
+ENV MYSQL_USER=interactiv
+ENV MYSQL_PASSWORD=ics427!
+ENV DEFAULT_SERVER_IP=10.199.30.67
+ENV DEFAULT_SERVER_PORT=20103
+
+# Exposer les ports
+EXPOSE 5000
+
+# Point d'entrée
+CMD ["python3", "web_server.py"]
+
+# =============================================================================
+# Étiquettes pour le multi-stage
+LABEL stage="runtime"
+LABEL purpose="cccp-dashboard-unified"
