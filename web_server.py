@@ -387,7 +387,7 @@ def api_console_session():
 
         # First get object_id for the session
         get_object_cmd = [
-            "/opt/consistent/bin/ccenter_report",
+            "/app/ccenter_report",
             "-login",
             username,
             "-password",
@@ -432,7 +432,7 @@ def api_console_session():
 
         # Now get events using the object_id
         get_events_cmd = [
-            "/opt/consistent/bin/ccenter_report",
+            "/app/ccenter_report",
             "-login",
             username,
             "-password",
