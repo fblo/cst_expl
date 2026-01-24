@@ -1,0 +1,79 @@
+# Multi-stage with distroless for ultimate minimal size
+FROM fedora:39 AS builder
+
+# Install build dependencies
+RUN dnf -y install --setopt=install_weak_deps=False --nodocs \
+        python3 \
+        python3-pip \
+        libxcrypt \
+        mariadb-connector-c \
+        && \
+    dnf -y clean all
+
+# Install Python requirements
+RUN pip3 install --no-cache-dir \
+        "flask>=2.0.0" \
+        "flask-cors>=3.0.0" \
+        "mysql-connector-python>=8.0.0"
+
+# Create app directory
+WORKDIR /app
+RUN useradd -m -s /bin/sh -u 1000 cccp
+
+# Copy application files
+COPY --chown=cccp:cccp ccenter_report web_server.py get_users_and_calls.py ./
+COPY --chown=cccp:cccp templates/ ./templates/
+
+# Create config
+RUN cat > config.py << 'EOF'
+import os
+MYSQL_CONFIG = {
+    "host": os.getenv("MYSQL_HOST", "vs-ics-prd-web-fr-505"),
+    "user": os.getenv("MYSQL_USER", "interactiv"),
+    "password": os.getenv("MYSQL_PASSWORD", "ics427!"),
+    "database": os.getenv("MYSQL_DATABASE"),
+    "charset": "utf8",
+    "collation": "utf8_general_ci",
+}
+DEFAULT_SERVER_IP = os.getenv("DEFAULT_SERVER_IP", "10.199.30.67")
+DEFAULT_SERVER_PORT = int(os.getenv("DEFAULT_SERVER_PORT", "20103"))
+FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_PORT = int(os.getenv("FLASK_PORT", 5000))
+FLASK_DEBUG = os.getenv("FLASK_DEBUG", "False").lower() == "true"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+EOF
+
+RUN chmod +x /app/ccenter_report
+
+# Final runtime image using gcr.io/distroless/python3-debian12
+FROM gcr.io/distroless/python3-debian12
+
+# Copy installed Python packages and app
+COPY --from=builder /usr/local/lib/python3.*/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /lib64 /lib64
+COPY --from=builder /usr/lib64 /usr/lib64
+COPY --from=builder /app /app
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
+
+WORKDIR /app
+
+# Environment variables
+ENV FLASK_HOST=0.0.0.0
+ENV FLASK_PORT=5000
+ENV FLASK_DEBUG=false
+ENV LOG_LEVEL=INFO
+ENV MYSQL_HOST=vs-ics-prd-web-fr-505
+ENV MYSQL_USER=interactiv
+ENV MYSQL_PASSWORD=ics427!
+ENV DEFAULT_SERVER_IP=10.199.30.67
+ENV DEFAULT_SERVER_PORT=20103
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+USER cccp
+
+EXPOSE 5000
+
+CMD ["python3", "web_server.py"]

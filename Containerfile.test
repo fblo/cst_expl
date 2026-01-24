@@ -1,101 +1,3 @@
-# Containerfile Multi-Stage pour CCCP Dashboard Unifié
-# Stage 1: Build du binaire ccenter_report minimal
-FROM fedora:39 AS builder
-
-LABEL maintainer="ccc_report_build"
-LABEL description="Builder for minimal ccenter_report binary with glibc 2.38+"
-LABEL version="1.0"
-
-# Variables d'environnement pour le build
-ENV CC=gcc
-ENV CXX=g++
-ENV CFLAGS="-O2 -g -D_UNIX_ -DCCENTER_REPORT"
-ENV CXXFLAGS="-O2 -g -std=c++03 -D_UNIX_ -DCCENTER_REPORT"
-ENV LDFLAGS="-lcrypt"
-ENV MAKEFLAGS="-j$(nproc)"
-
-# Installation des outils de build
-RUN dnf update -y && \
-    dnf groupinstall -y "Development Tools" && \
-    dnf install -y \
-        gcc \
-        gcc-c++ \
-        make \
-        cmake \
-        libxcrypt \
-        libxcrypt-devel \
-        libxml2-devel \
-        libxslt-devel \
-        zlib-devel \
-        openssl-devel \
-        which \
-        wget \
-        curl \
-        git && \
-    dnf clean all
-
-# Créer le lien symbolique pour libcrypt.so.2
-RUN ln -sf /lib64/libcrypt.so.1 /lib64/libcrypt.so.2 && \
-    ldconfig
-
-# Création des répertoires de build
-RUN mkdir -p /opt/consistent/bin
-
-# Copier les sources MINIMAUX qui compilent
-WORKDIR /opt/consistent
-COPY ./main_minimal.C ./
-COPY ./report_minimal.C ./
-COPY ./report_minimal.h ./
-COPY ./explorer_client_minimal.C ./
-COPY ./explorer_client_minimal.h ./
-COPY ./forward_declarations.hpp ./
-COPY ./common/define.h ./common/
-COPY ./common/idl.h ./common/
-COPY ./common/rules.mk ./common/
-COPY ./rules.mk ./
-
-# Créer un Makefile minimal pour les sources minimales
-RUN cat > Makefile << 'EOF'
-# Makefile minimal pour ccenter_report
-CC = gcc
-CXX = g++
-CFLAGS = -O2 -g -D_UNIX_ -DCCENTER_REPORT -I. -Icommon
-CXXFLAGS = -O2 -g -std=c++03 -D_UNIX_ -DCCENTER_REPORT -I. -Icommon
-LDFLAGS = -lcrypt
-
-# Sources minimales
-SOURCES = main_minimal.C report_minimal.C explorer_client_minimal.C
-OBJECTS = $(SOURCES:.C=.o)
-TARGET = ccenter_report
-
-# Règles
-all: $(TARGET)
-
-$(TARGET): $(OBJECTS)
-	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
-
-%.o: %.C
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-clean:
-	rm -f $(OBJECTS) $(TARGET)
-
-.PHONY: all clean
-EOF
-
-# Build du binaire minimal
-RUN make -j$(nproc)
-
-# Créer les répertoires finaux
-RUN mkdir -p /opt/consistent/bin && \
-    cp ccenter_report /opt/consistent/bin/ccenter_report && \
-    chmod +x /opt/consistent/bin/ccenter_report
-
-# Vérifier le binaire
-RUN /opt/consistent/bin/ccenter_report --version 2>/dev/null || echo "Binary created successfully"
-
-# =============================================================================
-# Stage 2: Conteneur Final avec Dashboard Web
 FROM fedora:39 AS runtime
 
 LABEL maintainer="ccc_report_dashboard"
@@ -140,7 +42,6 @@ RUN mkdir -p /app/{templates,logs,config}
 
 # Copier le binaire depuis le stage builder
 COPY ccenter_report /app
-
 
 # Copier les fichiers de l'application web
 WORKDIR /app
@@ -203,7 +104,3 @@ EXPOSE 5000
 # Point d'entrée
 CMD ["python3", "web_server.py"]
 
-# =============================================================================
-# Étiquettes pour le multi-stage
-LABEL stage="runtime"
-LABEL purpose="cccp-dashboard-unified"
