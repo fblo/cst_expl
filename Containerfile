@@ -94,8 +94,4 @@ ENV FLASK_HOST=0.0.0.0 \
 
 EXPOSE 5000
 
-# Lightweight health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/status', timeout=3)" || exit 1
-
 CMD ["python3", "web_server.py"]
