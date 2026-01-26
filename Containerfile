@@ -52,25 +52,6 @@ WORKDIR /app
 COPY --chown=cccp:cccp ccenter_report web_server.py get_users_and_calls.py ./
 COPY --chown=cccp:cccp templates/ ./templates/
 
-# Create minimal config
-RUN cat > config.py << 'EOF'
-import os
-MYSQL_CONFIG = {
-    "host": os.getenv("MYSQL_HOST", "vs-ics-prd-web-fr-505"),
-    "user": os.getenv("MYSQL_USER", "interactiv"),
-    "password": os.getenv("MYSQL_PASSWORD", "ics427!"),
-    "database": os.getenv("MYSQL_DATABASE"),
-    "charset": "utf8",
-    "collation": "utf8_general_ci",
-}
-DEFAULT_SERVER_IP = os.getenv("DEFAULT_SERVER_IP", "10.199.30.67")
-DEFAULT_SERVER_PORT = int(os.getenv("DEFAULT_SERVER_PORT", "20103"))
-FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
-FLASK_PORT = int(os.getenv("FLASK_PORT", 5000))
-FLASK_DEBUG = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-EOF
-
 # Set permissions
 RUN chmod +x /app/ccenter_report && \
     chown -R cccp:cccp /app

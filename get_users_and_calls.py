@@ -105,8 +105,7 @@ def get_user_real_names(host=DEFAULT_IP, port=DISPATCH_PORT):
     try:
         result = subprocess.run(
             [
-                "python3",
-                "/home/fblo/Documents/repos/cst_expl/ccenter_report.py",
+                "/app/ccenter_report",
                 "-login",
                 "admin",
                 "-password",
@@ -216,8 +215,7 @@ def get_user_real_names(host=DEFAULT_IP, port=DISPATCH_PORT):
 def get_ccxml_sessions(host=DEFAULT_IP, port=DISPATCH_PORT):
     """Récupère les sessions CCXML et les sépare en utilisateurs/appels"""
     cmd = [
-        "python3",
-        "/home/fblo/Documents/repos/cst_expl/ccenter_report.py",
+        "/app/ccenter_report",
         "-login",
         "supervisor_stho",
         "-password",
@@ -299,8 +297,7 @@ def get_ccxml_sessions(host=DEFAULT_IP, port=DISPATCH_PORT):
 def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
     """Récupère les détails des appels depuis dispatch (TOUTES les sessions)"""
     cmd = [
-        "python3",
-        "/home/fblo/Documents/repos/cst_expl/ccenter_report.py",
+        "/app/ccenter_report",
         "-login",
         "supervisor_stho",
         "-password",
@@ -487,8 +484,7 @@ def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DISPATCH_PORT)
     """Récupère les queues et leurs statistiques depuis dispatch"""
 
     queues_cmd = [
-        "python3",
-        "/home/fblo/Documents/repos/cst_expl/ccenter_report.py",
+        "/app/ccenter_report",
         "-login",
         "admin",
         "-password",

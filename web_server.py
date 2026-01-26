@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Dict, List
 import logging
 import mysql.connector
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cccp")
@@ -120,10 +121,10 @@ class DashboardState:
 state = DashboardState()
 
 MYSQL_CONFIG = {
-    "host": "vs-ics-prd-web-fr-505",
-    "user": "interactiv",
-    "password": "ics427!",
-    "database": None,
+    "host": os.getenv("MYSQL_HOST", "vs-ics-prd-web-fr-505"),
+    "user": os.getenv("MYSQL_USER", "interactiv"),
+    "password": os.getenv("MYSQL_PASSWORD", "ics427!"),
+    "database": os.getenv("MYSQL_DATABASE"),
     "charset": "utf8",
     "collation": "utf8_general_ci",
 }
