@@ -49,7 +49,7 @@ RUN useradd -m -s /bin/sh -u 1000 cccp && \
 WORKDIR /app
 
 # Copy application files
-COPY --chown=cccp:cccp ccenter_report web_server.py get_users_and_calls.py ./
+COPY --chown=cccp:cccp ccenter_report web_server.py get_users_and_calls.py config.py ./
 COPY --chown=cccp:cccp templates/ ./templates/
 
 # Set permissions
@@ -67,7 +67,6 @@ ENV FLASK_HOST=0.0.0.0 \
     MYSQL_HOST=vs-ics-prd-web-fr-505 \
     MYSQL_USER=interactiv \
     MYSQL_PASSWORD=ics427! \
-    DEFAULT_SERVER_IP=10.199.30.67 \
     DEFAULT_SERVER_PORT=20103 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

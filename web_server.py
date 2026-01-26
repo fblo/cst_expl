@@ -17,6 +17,9 @@ import logging
 import mysql.connector
 import os
 
+# Import configuration
+from config import MYSQL_CONFIG, FLASK_CONFIG
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cccp")
 
@@ -44,8 +47,9 @@ class DashboardState:
         self.has_project_selected = False
         self.available_servers: Dict[str, dict] = {}
 
-        self.refresh_thread = threading.Thread(target=self._auto_refresh, daemon=True)
-        self.refresh_thread.start()
+        # Ne pas démarrer le thread de rafraîchissement automatique tant qu'un serveur n'est pas sélectionné
+        self.refresh_thread = None
+        self.is_refresh_enabled = False
 
     def _auto_refresh(self):
         """Auto-refresh data from CCCP"""
@@ -81,8 +85,21 @@ class DashboardState:
             if len(self.all_events) > 500:
                 self.all_events = self.all_events[-500:]
 
+    def enable_auto_refresh(self):
+        """Enable the auto-refresh thread after a server is selected"""
+        if not self.is_refresh_enabled and self.current_host:
+            self.is_refresh_enabled = True
+            self.refresh_thread = threading.Thread(target=self._auto_refresh, daemon=True)
+            self.refresh_thread.start()
+            logger.info("Auto-refresh enabled")
+
     def _refresh_users(self):
         """Fetch users, calls, and queues from get_users_and_calls.py"""
+        # Ne pas essayer de rafraîchir si aucun hôte n'est défini
+        if not self.current_host:
+            logger.debug("No host configured, skipping refresh")
+            return
+            
         try:
             with self.lock:
                 host = self.current_host
@@ -119,15 +136,6 @@ class DashboardState:
 
 # Global state instance
 state = DashboardState()
-
-MYSQL_CONFIG = {
-    "host": os.getenv("MYSQL_HOST", "vs-ics-prd-web-fr-505"),
-    "user": os.getenv("MYSQL_USER", "interactiv"),
-    "password": os.getenv("MYSQL_PASSWORD", "ics427!"),
-    "database": os.getenv("MYSQL_DATABASE"),
-    "charset": "utf8",
-    "collation": "utf8_general_ci",
-}
 
 
 def get_servers_from_mysql():
@@ -576,9 +584,9 @@ if __name__ == "__main__":
     print(f"Loaded {len(servers)} projects")
 
     print()
-    print("Server running: http://localhost:5000")
+    print(f"Server running: http://{FLASK_CONFIG['host']}:{FLASK_CONFIG['port']}")
     print("  - Go to / for project selection")
     print("  - Go to /cst_explorer/PROJECT_NAME to access a project directly")
     print("=" * 70)
 
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host=FLASK_CONFIG["host"], port=FLASK_CONFIG["port"], debug=FLASK_CONFIG["debug"])

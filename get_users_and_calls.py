@@ -11,8 +11,8 @@ import sys
 import argparse
 from datetime import datetime
 
-DEFAULT_IP = "10.199.30.67"
-DISPATCH_PORT = 20103
+DEFAULT_IP = ""  # Default IP is now empty to allow initialization without server
+DEFAULT_DISPATCH_PORT = 20103
 
 
 def parse_arguments():
@@ -21,9 +21,9 @@ def parse_arguments():
         description="Fetch users and calls from CCCP server"
     )
     parser.add_argument(
-        "--host", type=str, default=DEFAULT_IP, help="Server IP address"
+        "--host", type=str, required=False, help="Server IP address"
     )
-    parser.add_argument("--port", type=int, default=DISPATCH_PORT, help="Dispatch port")
+    parser.add_argument("--port", type=int, default=DEFAULT_DISPATCH_PORT, help="Dispatch port")
     return parser.parse_args()
 
 
@@ -100,8 +100,13 @@ def parse_active_queues_state(active_queues):
     return "-"
 
 
-def get_user_real_names(host=DEFAULT_IP, port=DISPATCH_PORT):
+def get_user_real_names(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     """Récupère les vrais noms d'utilisateurs depuis dispatch avec tous les champs"""
+    # Ne pas exécuter si aucun hôte n'est spécifié
+    if not host:
+        print("Aucun hôte spécifié, skipping get_user_real_names", file=sys.stderr)
+        return {}
+        
     try:
         result = subprocess.run(
             [
@@ -212,8 +217,13 @@ def get_user_real_names(host=DEFAULT_IP, port=DISPATCH_PORT):
     return {}
 
 
-def get_ccxml_sessions(host=DEFAULT_IP, port=DISPATCH_PORT):
+def get_ccxml_sessions(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     """Récupère les sessions CCXML et les sépare en utilisateurs/appels"""
+    # Ne pas exécuter si aucun hôte n'est spécifié
+    if not host:
+        print("Aucun hôte spécifié, skipping get_ccxml_sessions", file=sys.stderr)
+        return [], []
+        
     cmd = [
         "/app/ccenter_report",
         "-login",
@@ -294,8 +304,13 @@ def get_ccxml_sessions(host=DEFAULT_IP, port=DISPATCH_PORT):
     return [], []
 
 
-def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
+def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     """Récupère les détails des appels depuis dispatch (TOUTES les sessions)"""
+    # Ne pas exécuter si aucun hôte n'est spécifié
+    if not host:
+        print("Aucun hôte spécifié, skipping get_dispatch_calls", file=sys.stderr)
+        return {}
+        
     cmd = [
         "/app/ccenter_report",
         "-login",
@@ -382,7 +397,7 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DISPATCH_PORT):
     return {}
 
 
-def get_all_data(host=DEFAULT_IP, port=DISPATCH_PORT):
+def get_all_data(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     """Récupère et combine toutes les données"""
 
     print("Récupération des utilisateurs...", file=sys.stderr)
@@ -480,9 +495,14 @@ def get_all_data(host=DEFAULT_IP, port=DISPATCH_PORT):
     return result
 
 
-def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DISPATCH_PORT):
+def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     """Récupère les queues et leurs statistiques depuis dispatch"""
-
+    
+    # Ne pas exécuter si aucun hôte n'est spécifié
+    if not host:
+        print("Aucun hôte spécifié, skipping get_queue_statistics", file=sys.stderr)
+        return []
+        
     queues_cmd = [
         "/app/ccenter_report",
         "-login",
@@ -581,10 +601,32 @@ def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DISPATCH_PORT)
     return []
 
 
+def show_help_and_exit():
+    """Affiche l'aide et quitte le programme"""
+    parser = argparse.ArgumentParser(
+        description="Fetch users and calls from CCCP server"
+    )
+    parser.add_argument(
+        "--host", type=str, required=False, help="Server IP address"
+    )
+    parser.add_argument("--port", type=int, default=DEFAULT_DISPATCH_PORT, help="Dispatch port")
+    parser.print_help()
+    sys.exit(1)
+
 if __name__ == "__main__":
+    import sys
+    
+    # Si aucun argument n'est fourni (ou seulement -h/--help), afficher l'aide
+    if len(sys.argv) == 1:
+        show_help_and_exit()
+    
     args = parse_arguments()
     host = args.host
     port = args.port
+
+    # Si aucun host n'est fourni, afficher l'aide
+    if not host:
+        show_help_and_exit()
 
     result = get_all_data(host=host, port=port)
     print(json.dumps(result, indent=2, ensure_ascii=False))
