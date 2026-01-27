@@ -312,12 +312,12 @@
         
         .mode-badge.supervisor {
             background: #667eea44;
-            color: #a8a4ff;
+            color: var(--text-primary);
         }
         
         .mode-badge.agent {
             background: #11998e44;
-            color: #69f0ae;
+            color: var(--text-primary);
         }
         
         .mode-badge.unplug {
@@ -564,10 +564,10 @@
 
         .theme-selector select {
             padding: 6px 12px;
-            background: #0d1117;
-            border: 1px solid #30363d;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
             border-radius: 6px;
-            color: #c9d1d9;
+            color: var(--text-primary);
             font-size: 13px;
             cursor: pointer;
         }
@@ -681,14 +681,14 @@
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Login</th>
-                                <th>State</th>
-                                <th>Mode</th>
+                                <th onclick="sortUsers('user_name')" style="cursor: pointer;">Name ↕️</th>
+                                <th onclick="sortUsers('login')" style="cursor: pointer;">Login ↕️</th>
+                                <th onclick="sortUsers('state')" style="cursor: pointer;">State ↕️</th>
+                                <th onclick="sortUsers('mode')" style="cursor: pointer;">Mode ↕️</th>
                                 <th>Project</th>
-                                <th>Phone</th>
-                                <th>Profile</th>
-                                <th>Connected</th>
+                                <th>Position</th>
+                                <th onclick="sortUsers('profile_name')" style="cursor: pointer;">Profile ↕️</th>
+                                <th onclick="sortUsers('create_date_iso')" style="cursor: pointer;">Connected ↕️</th>
                                 <th>Duration</th>
                             </tr>
                         </thead>
@@ -716,12 +716,12 @@
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>Queue</th>
+                                <th onclick="sortQueues('name')" style="cursor: pointer;">Name ↕️</th>
                                 <th>Type</th>
                                 <th>Display Name</th>
-                                <th>Logged</th>
-                                <th>Working</th>
-                                <th>Waiting</th>
+                                <th onclick="sortQueues('logged')" style="cursor: pointer;">Logged ↕️</th>
+                                <th onclick="sortQueues('working')" style="cursor: pointer;">Working ↕️</th>
+                                <th onclick="sortQueues('waiting')" style="cursor: pointer;">Waiting ↕️</th>
                             </tr>
                         </thead>
                         <tbody id="queues-container">
@@ -819,20 +819,37 @@
         let allQueues = [];
         let allHistory = [];
         
+        // Variables pour stocker l'état du tri
+        let userSortColumn = null;
+        let userSortDirection = 'asc'; // 'asc' ou 'desc'
+        let queueSortColumn = null;
+        let queueSortDirection = 'desc'; // 'asc' ou 'desc'
+        
         // Load users
         async function loadUsers() {
             try {
                 const response = await fetch('/api/users');
                 const users = await response.json();
                 
-                // Filter out "consistent" user and sort by connected date (most recent first)
-                allUsers = users
-                    .filter(u => u.login !== 'consistent')
-                    .sort((a, b) => {
-                        const dateA = a.create_date_iso || '';
-                        const dateB = b.create_date_iso || '';
-                        return dateB.localeCompare(dateA);
+                // Filter out "consistent" user
+                allUsers = users.filter(u => u.login !== 'consistent');
+                
+                // Réappliquer le tri utilisateur si nécessaire
+                if (userSortColumn) {
+                    allUsers.sort((a, b) => {
+                        let valueA = a[userSortColumn] || '';
+                        let valueB = b[userSortColumn] || '';
+                        
+                        // Convertir en chaîne de caractères pour comparaison
+                        valueA = String(valueA).toLowerCase();
+                        valueB = String(valueB).toLowerCase();
+                        
+                        let result = valueA.localeCompare(valueB);
+                        
+                        // Inverser le résultat si la direction est descendante
+                        return userSortDirection === 'desc' ? -result : result;
                     });
+                }
                 
                 document.getElementById('stat-users').textContent = allUsers.length;
                 
@@ -884,6 +901,32 @@
             }).join('');
         }
         
+        function sortUsers(column) {
+            // Si la même colonne est cliquée à nouveau, inverser la direction
+            if (userSortColumn === column) {
+                userSortDirection = userSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                userSortColumn = column;
+                userSortDirection = 'asc';
+            }
+            
+            allUsers.sort((a, b) => {
+                let valueA = a[column] || '';
+                let valueB = b[column] || '';
+                
+                // Convertir en chaîne de caractères pour comparaison
+                valueA = String(valueA).toLowerCase();
+                valueB = String(valueB).toLowerCase();
+                
+                let result = valueA.localeCompare(valueB);
+                
+                // Inverser le résultat si la direction est descendante
+                return userSortDirection === 'desc' ? -result : result;
+            });
+            
+            renderUsers(allUsers);
+        }
+        
         function filterUsers() {
             const search = document.getElementById('user-search').value.toLowerCase();
             const filtered = allUsers.filter(user => {
@@ -902,8 +945,44 @@
                 const response = await fetch('/api/queues');
                 const queues = await response.json();
                 allQueues = queues;
+                
+                // Réappliquer le tri des files d'attente si nécessaire
+                if (queueSortColumn) {
+                    allQueues.sort((a, b) => {
+                        let valueA, valueB;
+                        
+                        if (queueSortColumn === 'name') {
+                            // Pour le tri alphabétique
+                            valueA = a[queueSortColumn] || '';
+                            valueB = b[queueSortColumn] || '';
+                            
+                            // Convertir en chaîne de caractères pour comparaison
+                            valueA = String(valueA).toLowerCase();
+                            valueB = String(valueB).toLowerCase();
+                            
+                            let result = valueA.localeCompare(valueB);
+                            
+                            // Inverser le résultat si la direction est descendante
+                            return queueSortDirection === 'desc' ? -result : result;
+                        } else {
+                            // Pour les colonnes numériques (logged, working, waiting)
+                            valueA = a[queueSortColumn] || 0;
+                            valueB = b[queueSortColumn] || 0;
+                            
+                            // Convertir en nombres pour comparaison numérique
+                            valueA = Number(valueA);
+                            valueB = Number(valueB);
+                            
+                            let result = valueA - valueB;
+                            
+                            // Inverser le résultat si la direction est descendante
+                            return queueSortDirection === 'desc' ? -result : result;
+                        }
+                    });
+                }
+                
                 document.getElementById('stat-queues').textContent = queues.length;
-                renderQueues(queues);
+                renderQueues(allQueues);
             } catch (e) {
                 console.error('Error loading queues:', e);
             }
@@ -926,6 +1005,50 @@
                     <td><span class="queue-stat waiting">${queue.waiting ?? 0}</span></td>
                 </tr>
             `).join('');
+        }
+        
+        function sortQueues(column) {
+            // Si la même colonne est cliquée à nouveau, inverser la direction
+            if (queueSortColumn === column) {
+                queueSortDirection = queueSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                queueSortColumn = column;
+                queueSortDirection = 'desc'; // Par défaut pour les queues
+            }
+            
+            allQueues.sort((a, b) => {
+                let valueA, valueB;
+                
+                if (column === 'name') {
+                    // Pour le tri alphabétique
+                    valueA = a[column] || '';
+                    valueB = b[column] || '';
+                    
+                    // Convertir en chaîne de caractères pour comparaison
+                    valueA = String(valueA).toLowerCase();
+                    valueB = String(valueB).toLowerCase();
+                    
+                    let result = valueA.localeCompare(valueB);
+                    
+                    // Inverser le résultat si la direction est descendante
+                    return queueSortDirection === 'desc' ? -result : result;
+                } else {
+                    // Pour les colonnes numériques (logged, working, waiting)
+                    valueA = a[column] || 0;
+                    valueB = b[column] || 0;
+                    
+                    // Convertir en nombres pour comparaison numérique
+                    valueA = Number(valueA);
+                    valueB = Number(valueB);
+                    
+                    let result = valueA - valueB;
+                    
+                    // Inverser le résultat si la direction est descendante
+                    return queueSortDirection === 'desc' ? -result : result;
+                }
+            });
+            
+            renderQueues(allQueues);
         }
         
         function filterQueues() {
