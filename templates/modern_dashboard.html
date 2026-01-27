@@ -622,9 +622,9 @@
     </style>
 </head>
 <body data-theme="dark">
-    <div class="header">
+        <div class="header">
         <div style="display: flex; align-items: center; gap: 20px;">
-            <h1>CCCP Explorer</h1>
+            <h1 id="main-title">CCCP Explorer</h1>
             <div class="theme-selector">
                 <label for="theme-select">Theme:</label>
                 <select id="theme-select" onchange="changeTheme()">
@@ -639,6 +639,7 @@
         <div class="stats-bar">
         <div class="stat-item" style="flex: 1;">
             <span class="stat-value" id="stat-project" style="font-size: 18px; color: var(--accent-color);">-</span>
+            <span class="stat-label">Project</span>
         </div>
         <div class="stat-item">
             <span class="stat-value" id="stat-users">0</span>
@@ -1100,14 +1101,28 @@
             tbody.innerHTML = history.map(call => `
                 <tr style="cursor: pointer;" onclick="openConsole('${call.session_id || ''}')">
                     <td>${call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
-                    <td>${call.caller || '-'}</td>
-                    <td>${call.called || '-'}</td>
+                    <td>${removePhonePrefixes(call.caller || '-')}</td>
+                    <td>${removePhonePrefixes(call.called || '-')}</td>
                     <td>${call.duration || '-'}</td>
                     <td style="font-family: monospace; font-size: 11px;">${(call.session_id || '-').split('@')[0]}</td>
                     <td>${call.queue_name || '-'}</td>
                     <td>${call.agent || '-'}</td>
                 </tr>
             `).join('');
+        }
+        
+        // Function to remove phone number prefixes
+        function removePhonePrefixes(number) {
+            if (!number || number === '-') return number;
+            // Remove "tel:00" prefix
+            if (number.startsWith('tel:00')) {
+                return number.substring(6); // Remove "tel:00" (6 characters)
+            }
+            // Remove "00" prefix
+            if (number.startsWith('00')) {
+                return number.substring(2); // Remove "00" (2 characters)
+            }
+            return number;
         }
         
         function filterHistory() {
@@ -1170,6 +1185,7 @@
         }
 
         function selectProject(host, port, project) {
+            document.getElementById('stat-project').textContent = project; // Mettre à jour le projet dans la barre de stats
             selectServer(host, port, project);
         }
 
@@ -1205,6 +1221,9 @@
                         });
                         const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
                         document.getElementById('stat-project').textContent = projectDisplay;
+                        updateMainTitle(projectDisplay); // Mettre à jour le titre principal avec le projet trouvé
+                    } else {
+                        updateMainTitle(getProjectFromUrl()); // Utiliser le projet de l'URL
                     }
                     
                     renderUsers(allUsers);
@@ -1233,11 +1252,20 @@
             return match ? decodeURIComponent(match[1]) : null;
         }
 
+        // Update the main title with the project name
+        function updateMainTitle(projectName) {
+            const titleElement = document.getElementById('main-title');
+            titleElement.textContent = 'CCCP Explorer'; // Toujours afficher uniquement 'CCCP Explorer' dans le titre principal
+        }
+
         // Extract project name from URL and update project display
         function updateProjectDisplay() {
             const projectFromUrl = getProjectFromUrl();
             if (projectFromUrl) {
                 document.getElementById('stat-project').textContent = projectFromUrl;
+                updateMainTitle(projectFromUrl);
+            } else {
+                updateMainTitle();
             }
         }
 

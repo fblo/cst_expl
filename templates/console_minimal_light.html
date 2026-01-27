@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CCCP Console</title>
+    <title id="console-title">CCCP Console</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
     <style>
         :root {
@@ -305,6 +305,10 @@
         <div class="header">
             <div class="header-left">
                 <div class="session-info">
+                    <span class="project-label"></span>
+                    <b><span class="project-name" id="projectName">...</span></b>
+                </div>
+                <div class="session-info">
                     <span class="session-label">Session</span>
                     <span class="session-name" id="sessionName">...</span>
                 </div>
@@ -372,6 +376,76 @@
         const session = urlParams.get('session') || 'unknown';
 
         document.getElementById('sessionName').textContent = session;
+        
+        // Extract project name from URL and update title
+        function updateConsoleTitle() {
+            const path = window.location.pathname;
+            const match = path.match(/^\/console\/?.*$/);
+            if (match) {
+                // Extract project from the main page URL that launched this console
+                const referer = document.referrer;
+                const refererMatch = referer.match(/\/cst_explorer\/([^\/\?#]+)/);
+                if (refererMatch) {
+                    const projectName = decodeURIComponent(refererMatch[1]);
+                    document.getElementById('console-title').textContent = `${projectName} - CCCP Console`;
+                } else {
+                    document.getElementById('console-title').textContent = 'PROJECT - CCCP Console';
+                }
+            } else {
+                document.getElementById('console-title').textContent = 'PROJECT - CCCP Console';
+            }
+        }
+        
+        // Extract project name from URL and update project display
+        function updateProjectDisplay() {
+            const path = window.location.pathname;
+            const match = path.match(/^\/console\/?.*$/);
+            if (match) {
+                // Extract project from the main page URL that launched this console
+                const referer = document.referrer;
+                const refererMatch = referer.match(/\/cst_explorer\/([^\/\?#]+)/);
+                if (refererMatch) {
+                    const projectName = decodeURIComponent(refererMatch[1]);
+                    document.getElementById('projectName').textContent = projectName;
+                } else {
+                    document.getElementById('projectName').textContent = 'PROJECT';
+                }
+            } else {
+                document.getElementById('projectName').textContent = 'PROJECT';
+            }
+        }
+        
+        // Update title when page loads
+        updateConsoleTitle();
+        // Update project display when page loads
+        updateProjectDisplay();
+        
+        // Function to extract project name from URL
+        function getProjectFromUrl() {
+            const path = window.location.pathname;
+            const match = path.match(/^\/console\/?.*$/);
+            if (match) {
+                // Extract project from the main page URL that launched this console
+                const referer = document.referrer;
+                const refererMatch = referer.match(/\/cst_explorer\/([^\/\?#]+)/);
+                return refererMatch ? decodeURIComponent(refererMatch[1]) : null;
+            }
+            return null;
+        }
+        
+        // Function to remove phone number prefixes
+        function removePhonePrefixes(number) {
+            if (!number || number === '-') return number;
+            // Remove "tel:00" prefix
+            if (number.startsWith('tel:00')) {
+                return number.substring(6); // Remove "tel:00" (6 characters)
+            }
+            // Remove "00" prefix
+            if (number.startsWith('00')) {
+                return number.substring(2); // Remove "00" (2 characters)
+            }
+            return number;
+        }
 
         function setStatus(text, loading = false) {
             const el = document.getElementById('status');
@@ -381,6 +455,19 @@
             } else {
                 el.textContent = text;
             }
+        }
+        
+        // Function to extract project name from URL
+        function getProjectFromUrl() {
+            const path = window.location.pathname;
+            const match = path.match(/^\/console\/?.*$/);
+            if (match) {
+                // Extraire le projet de l'URL de la page principale qui a lancé cette console
+                const referer = document.referrer;
+                const refererMatch = referer.match(/\/cst_explorer\/([^\/\?#]+)/);
+                return refererMatch ? decodeURIComponent(refererMatch[1]) : null;
+            }
+            return null;
         }
 
         function setObjectId(id) {
