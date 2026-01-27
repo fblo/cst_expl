@@ -639,7 +639,6 @@
         <div class="stats-bar">
         <div class="stat-item" style="flex: 1;">
             <span class="stat-value" id="stat-project" style="font-size: 18px; color: var(--accent-color);">-</span>
-            <span class="stat-label">Project</span>
         </div>
         <div class="stat-item">
             <span class="stat-value" id="stat-users">0</span>
@@ -673,7 +672,7 @@
                 <div class="card-header">
                     <span class="card-title">CCCP Users</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="user-search" placeholder="Filter..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterUsers()">
+                        <input type="text" id="user-search" placeholder="Search..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterUsers()">
                         <button class="btn btn-secondary" onclick="loadUsers()">Refresh</button>
                     </div>
                 </div>
@@ -708,7 +707,7 @@
                 <div class="card-header">
                     <span class="card-title">Queues</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="queue-search" placeholder="Filter..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterQueues()">
+                        <input type="text" id="queue-search" placeholder="Search..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterQueues()">
                         <button class="btn btn-secondary" onclick="loadQueues()">Refresh</button>
                     </div>
                 </div>
@@ -740,7 +739,7 @@
                 <div class="card-header">
                     <span class="card-title">Call History</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="history-search" placeholder="Filter..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterHistory()">
+                        <input type="text" id="history-search" placeholder="Search..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterHistory()">
                         <button class="btn btn-secondary" onclick="loadHistory()">Refresh</button>
                     </div>
                 </div>
@@ -775,7 +774,7 @@
                     <button class="btn btn-secondary" onclick="loadServers()">Refresh</button>
                 </div>
                 <div class="card-body">
-                    <input type="text" id="project-search" class="project-search" placeholder="Search project..." onkeyup="filterProjects()">
+                    <input type="text" id="project-search" class="project-search" placeholder="Search..." onkeyup="filterProjects()">
                     <div class="project-list" id="project-list"></div>
                 </div>
             </div>
@@ -808,9 +807,15 @@
                 tab.classList.add('active');
                 const tabContent = document.getElementById(tab.dataset.tab + '-tab');
                 tabContent.classList.add('active');
-                // Refresh queues when tab is clicked
+                // Refresh data when tab is clicked
                 if (tab.dataset.tab === 'queues') {
                     loadQueues();
+                } else if (tab.dataset.tab === 'users') {
+                    loadUsers();
+                } else if (tab.dataset.tab === 'history') {
+                    loadHistory();
+                } else if (tab.dataset.tab === 'connect') {
+                    loadServers();
                 }
             });
         });
@@ -824,6 +829,16 @@
         let userSortDirection = 'asc'; // 'asc' ou 'desc'
         let queueSortColumn = null;
         let queueSortDirection = 'desc'; // 'asc' ou 'desc'
+        
+        // Fonction pour gérer le démarrage de la saisie dans un champ de recherche
+        function onSearchInputStart(inputElement) {
+            // Cette fonction ne fait plus rien puisque le rafraîchissement automatique a été supprimé
+        }
+        
+        // Fonction pour gérer la fin de la saisie dans un champ de recherche
+        function onSearchInputEnd(inputElement) {
+            // Cette fonction ne fait plus rien puisque le rafraîchissement automatique a été supprimé
+        }
         
         // Load users
         async function loadUsers() {
@@ -853,14 +868,17 @@
                 
                 document.getElementById('stat-users').textContent = allUsers.length;
                 
-                const projectElements = new Set();
-                allUsers.forEach(u => {
-                    if (u.project_name && u.project_name !== '-') {
-                        projectElements.add(u.project_name);
-                    }
-                });
-                const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
-                document.getElementById('stat-project').textContent = projectDisplay;
+                // Ne mettre à jour le projet que s'il n'y en a pas dans l'URL
+                if (!getProjectFromUrl()) {
+                    const projectElements = new Set();
+                    allUsers.forEach(u => {
+                        if (u.project_name && u.project_name !== '-') {
+                            projectElements.add(u.project_name);
+                        }
+                    });
+                    const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
+                    document.getElementById('stat-project').textContent = projectDisplay;
+                }
                 
                 renderUsers(allUsers);
             } catch (e) {
@@ -1177,6 +1195,18 @@
                     document.getElementById('stat-history').textContent = allHistory.length;
                     document.getElementById('stat-last-update').textContent = data.last_update ? new Date(data.last_update).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--';
                     
+                    // Ne mettre à jour le projet que s'il n'y en a pas dans l'URL
+                    if (!getProjectFromUrl()) {
+                        const projectElements = new Set();
+                        allUsers.forEach(u => {
+                            if (u.project_name && u.project_name !== '-') {
+                                projectElements.add(u.project_name);
+                            }
+                        });
+                        const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
+                        document.getElementById('stat-project').textContent = projectDisplay;
+                    }
+                    
                     renderUsers(allUsers);
                     renderQueues(allQueues);
                     renderHistory(allHistory);
@@ -1201,6 +1231,14 @@
             const path = window.location.pathname;
             const match = path.match(/^\/cst_explorer\/(.+)$/);
             return match ? decodeURIComponent(match[1]) : null;
+        }
+
+        // Extract project name from URL and update project display
+        function updateProjectDisplay() {
+            const projectFromUrl = getProjectFromUrl();
+            if (projectFromUrl) {
+                document.getElementById('stat-project').textContent = projectFromUrl;
+            }
         }
 
         // Load data on page load
@@ -1230,6 +1268,8 @@
                             });
                     }
                 });
+                // Update project display with the project from URL
+                updateProjectDisplay();
             } else {
                 loadServers();
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1238,15 +1278,54 @@
                 document.getElementById('connect-tab').classList.add('active');
             }
             
-            setInterval(() => {
-                if (window.location.pathname.startsWith('/cst_explorer/')) {
-                    loadStatus();
-                    loadUsers();
-                    loadQueues();
-                    loadHistory();
+            // Gestion de la touche F5 pour rafraîchir toutes les vues
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'F5') {
+                    event.preventDefault(); // Empêche le rechargement de page par défaut
+                    refreshAllViews();
                 }
-            }, 3000);
+            });
         });
+
+        // Fonction pour rafraîchir toutes les vues
+        async function refreshAllViews() {
+            const activeTab = document.querySelector('.tab.active');
+            const activeTabId = activeTab ? activeTab.dataset.tab : null;
+            
+            // Sauvegarder le projet courant de l'URL avant le rafraîchissement
+            const projectFromUrl = getProjectFromUrl();
+            
+            // Rafraîchir toutes les données
+            if (typeof loadUsers === 'function') {
+                await loadUsers();
+            }
+            if (typeof loadQueues === 'function') {
+                await loadQueues();
+            }
+            if (typeof loadHistory === 'function') {
+                await loadHistory();
+            }
+            if (typeof loadStatus === 'function') {
+                await loadStatus();
+            }
+            
+            // Restaurer le projet de l'URL après le rafraîchissement
+            if (projectFromUrl) {
+                document.getElementById('stat-project').textContent = projectFromUrl;
+            }
+            
+            // Restaurer l'onglet actif après le chargement
+            if (activeTabId) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                const targetTab = document.querySelector(`.tab[data-tab="${activeTabId}"]`);
+                const targetContent = document.getElementById(`${activeTabId}-tab`);
+                if (targetTab && targetContent) {
+                    targetTab.classList.add('active');
+                    targetContent.classList.add('active');
+                }
+            }
+        }
 
         async function loadStatus() {
             try {
