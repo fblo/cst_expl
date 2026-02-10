@@ -663,6 +663,7 @@
         <div class="tab active" data-tab="users">Users</div>
         <div class="tab" data-tab="queues">Queues</div>
         <div class="tab" data-tab="history">Calls</div>
+        <div class="tab" data-tab="rlog">Rlog</div>
         <div class="tab" data-tab="connect">Projects</div>
     </div>
     
@@ -767,6 +768,27 @@
             </div>
         </div>
         
+        <!-- Rlog Tab -->
+        <div id="rlog-tab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">CCXML Sessions</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="date" id="rlog-date" value="2026-02-08" style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px;">
+                        <button class="btn btn-primary" onclick="loadSessions()">Load</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div style="margin-bottom: 16px; font-size: 12px; color: var(--text-muted);">
+                        <span id="rlog-info">-</span>
+                    </div>
+                    <div id="rlog-sessions" class="events-list" style="max-height: calc(100vh - 400px); font-family: monospace; font-size: 11px;">
+                        <div class="empty-state">Select a date and click "Load" to view sessions</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Connect Tab -->
         <div id="connect-tab" class="tab-content">
             <div class="card">
@@ -815,6 +837,8 @@
                     loadUsers();
                 } else if (tab.dataset.tab === 'history') {
                     loadHistory();
+                } else if (tab.dataset.tab === 'rlog') {
+                    loadSessions();
                 } else if (tab.dataset.tab === 'connect') {
                     loadServers();
                 }
@@ -1144,6 +1168,89 @@
                 const consoleUrl = theme === 'light' ? '/console_light' : '/console';
                 window.open(consoleUrl + '?session=' + encodeURIComponent(sessionId), '_blank');
             }
+        }
+
+        let allRlog = [];
+        let rlogData = null;
+
+        async function loadSessions() {
+            const date = document.getElementById('rlog-date').value;
+            try {
+                const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
+                const data = await response.json();
+
+                if (data.success) {
+                    rlogData = data;
+                    const sessions = data.sessions || {};
+                    
+                    document.getElementById('rlog-info').textContent = 
+                        `Date: ${data.date} | Files: ${data.total_files} | Sessions: ${data.session_count}`;
+                    
+                    renderSessions(sessions);
+                } else {
+                    document.getElementById('rlog-sessions').innerHTML = 
+                        '<div class="empty-state">' + (data.error || 'Error loading sessions') + '</div>';
+                }
+            } catch (e) {
+                console.error('Error loading sessions:', e);
+                document.getElementById('rlog-sessions').innerHTML = '<div class="empty-state">Error loading sessions</div>';
+            }
+        }
+
+        function renderSessions(sessions) {
+            const container = document.getElementById('rlog-sessions');
+            const sessionList = Object.values(sessions);
+            const currentDate = document.getElementById('rlog-date').value;
+
+            if (sessionList.length === 0) {
+                container.innerHTML = '<div class="empty-state">No sessions found for this date</div>';
+                return;
+            }
+
+            container.innerHTML = sessionList.map(session => {
+                const shortId = session.id ? session.id.split('@')[0] + '@...' : '-';
+                const type = session.type || '-';
+                const caller = session.caller || '-';
+                const called = session.called || '-';
+
+                return `<div style="padding: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 4px; cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${currentDate}')" title="Click to view session details">
+                    <div style="color: var(--purple-color); font-weight: 600; font-size: 12px; margin-bottom: 6px;">
+                        ${escapeHtml(session.id)}
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 11px;">
+                        <div>
+                            <span style="color: var(--text-secondary);">Type:</span><br>
+                            <span style="color: var(--accent-color);">${escapeHtml(type)}</span>
+                        </div>
+                        <div>
+                            <span style="color: var(--text-secondary);">Caller:</span><br>
+                            <span style="color: var(--success-color);">${escapeHtml(caller)}</span>
+                        </div>
+                        <div>
+                            <span style="color: var(--text-secondary);">Called:</span><br>
+                            <span style="color: var(--warning-color);">${escapeHtml(called)}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function openRlogConsole(sessionId, date) {
+            if (sessionId) {
+                const theme = document.body.getAttribute('data-theme') || 'dark';
+                const consoleUrl = theme === 'light' ? '/rlog_console_light' : '/rlog_console';
+                window.open(consoleUrl + '?session=' + sessionId + '&date=' + encodeURIComponent(date), '_blank');
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         // Load servers from MySQL

@@ -5,3 +5,4 @@ __pycache__/
 session*.md
 app/
 config.py
+import_logs/*

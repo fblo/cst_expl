@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="console-title">RLOG Console</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-color: #58a6ff;
+            --accent-hover: #79c0ff;
+            --success-bg: #23863644;
+            --success-color: #3fb950;
+            --warning-bg: #d2992244;
+            --warning-color: #d29922;
+            --error-bg: #da363344;
+            --error-color: #f85149;
+            --purple-color: #cba6f7;
+            --input-bg: #0d1117;
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f6f8fa;
+            --bg-tertiary: #edeff1;
+            --border-color: #d0d7de;
+            --text-primary: #24292f;
+            --text-secondary: #57606a;
+            --text-muted: #8b949e;
+            --accent-color: #0969da;
+            --accent-hover: #0550ae;
+            --success-bg: #dafbe1;
+            --success-color: #1a7f37;
+            --warning-bg: #fff8c5;
+            --warning-color: #9a6700;
+            --error-bg: #ffebe9;
+            --error-color: #cf222e;
+            --purple-color: #8250df;
+            --input-bg: #f6f8fa;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 12px;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 12px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 12px;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .theme-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .theme-selector label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .theme-selector select {
+            padding: 4px 8px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .session-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .session-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .session-name {
+            color: var(--accent-color);
+            font-weight: 600;
+            font-size: 13px;
+            transition: color 0.3s ease;
+            word-break: break-all;
+        }
+        .date-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .date-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .date-value {
+            color: var(--purple-color);
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .status {
+            display: flex;
+            gap: 24px;
+            font-size: 12px;
+        }
+        .status-item {
+            display: flex;
+            gap: 6px;
+        }
+        .status-item span:first-child {
+            color: var(--text-muted);
+        }
+        .status-item span:last-child {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .console-container {
+            flex: 1;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .console-header {
+            display: grid;
+            grid-template-columns: 170px 230px 230px 100px 150px 1fr;
+            gap: 0;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .console-header div {
+            padding: 8px 12px;
+            border-right: 1px solid var(--border-color);
+        }
+        .console-header div:last-child {
+            border-right: none;
+        }
+        .console {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+        .console::-webkit-scrollbar {
+            width: 8px;
+        }
+        .console::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        .console::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        .console::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        .row {
+            display: grid;
+            grid-template-columns: 170px 230px 230px 100px 150px 1fr;
+            gap: 0;
+            border-bottom: 1px solid var(--border-color);
+            line-height: 1.5;
+            transition: background-color 0.2s;
+        }
+        .row:hover {
+            background: var(--bg-tertiary);
+        }
+        .row div {
+            padding: 6px 12px;
+            border-right: 1px solid var(--border-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: copy;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .row div:last-child {
+            border-right: none;
+        }
+        .row div:hover {
+            background: var(--border-color);
+        }
+        .row .date { color: var(--text-muted); }
+        .row .source { color: var(--accent-color); }
+        .row .target { color: var(--purple-color); }
+        .row .state { color: var(--warning-color); }
+        .row .name { color: var(--success-color); }
+        .row .data {
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            overflow: visible;
+            text-overflow: clip;
+            font-size: 11px;
+        }
+        .line.error { color: var(--error-color); background: var(--error-bg); }
+        .line.success { color: var(--success-color); }
+        .line.info { color: var(--text-muted); }
+        .line.header { color: #ffaa00; font-weight: bold; }
+        .controls {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-top: 12px;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .btn {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: var(--border-color);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .empty {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 13px;
+        }
+        .data-highlight-x {
+            background: var(--success-bg);
+            color: var(--success-color);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        .data-highlight-called {
+            background: var(--warning-bg);
+            color: var(--warning-color);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        .console-search {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .console-search:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+        .highlight {
+            background: rgba(255, 215, 0, 0.4);
+            color: inherit;
+            border-radius: 2px;
+            font-weight: 600;
+        }
+        .footer {
+            text-align: center;
+            padding: 8px;
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+        .rlog-badge {
+            background: var(--purple-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body data-theme="dark">
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <div>
+                    <span class="rlog-badge">RLOG</span>
+                </div>
+                <div class="session-info">
+                    <span class="session-label">Session</span>
+                    <span class="session-name" id="sessionName">...</span>
+                </div>
+                <div class="date-info">
+                    <span class="date-label">Date</span>
+                    <span class="date-value" id="sessionDate">...</span>
+                </div>
+                <div class="theme-selector">
+                    <label for="theme-select">Theme:</label>
+                    <select id="theme-select" onchange="changeTheme()">
+                        <option value="dark">Dark</option>
+                        <option value="light">Light</option>
+                    </select>
+                </div>
+            </div>
+            <div class="status">
+                <div class="status-item">
+                    <span>Lines</span>
+                    <span id="lineCount">0</span>
+                </div>
+                <div class="status-item">
+                    <span>Status</span>
+                    <span id="status">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <input type="text" id="console-search" class="console-search" placeholder="Search..." onkeyup="filterConsole()">
+
+        <div class="console-container">
+            <div class="console-header">
+                <div>Date</div>
+                <div>Source</div>
+                <div>Target</div>
+                <div>State</div>
+                <div>Name</div>
+                <div>Data</div>
+            </div>
+            <div class="console" id="console"></div>
+        </div>
+
+        <div class="controls">
+            <button class="btn" onclick="runCommand()">Refresh</button>
+            <button class="btn" onclick="window.close()">Close</button>
+        </div>
+    </div>
+
+    <script>
+        function changeTheme() {
+            const select = document.getElementById('theme-select');
+            const theme = select.value;
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('rlog_console_theme', theme);
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('rlog_console_theme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+            document.getElementById('theme-select').value = savedTheme;
+        }
+
+        let allColumns = [];
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const session = urlParams.get('session') || 'unknown';
+        const date = urlParams.get('date') || new Date().toISOString().split('T')[0];
+
+        document.getElementById('sessionName').textContent = session;
+        document.getElementById('sessionDate').textContent = date;
+
+        document.getElementById('console-title').textContent = `RLOG Console - ${session}`;
+
+        function setStatus(text, loading = false) {
+            const el = document.getElementById('status');
+            if (loading) {
+                el.innerHTML = '<span class="loading"></span> ' + text;
+            } else {
+                el.textContent = text;
+            }
+        }
+
+        function setObjectId(id) {
+            document.getElementById('objectId').textContent = id || '-';
+        }
+
+        function escapeQuotes(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        function copyToClipboardRaw(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('Copied!');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        }
+
+        function renderTable(columns, search) {
+            const console = document.getElementById('console');
+            console.innerHTML = '';
+
+            if (columns.length === 0) {
+                console.innerHTML = '<div class="empty">No events found for this session</div>';
+                return;
+            }
+
+            columns.forEach(col => {
+                const row = document.createElement('div');
+                row.className = 'row';
+
+                const dateDiv = document.createElement('div');
+                dateDiv.className = 'date';
+                dateDiv.appendChild(createHighlightNode(col.date, search));
+
+                const sourceDiv = document.createElement('div');
+                sourceDiv.className = 'source';
+                sourceDiv.title = col.source || '';
+                sourceDiv.appendChild(createHighlightNode(col.source, search));
+
+                const targetDiv = document.createElement('div');
+                targetDiv.className = 'target';
+                targetDiv.title = col.target || '';
+                targetDiv.appendChild(createHighlightNode(col.target, search));
+
+                const stateDiv = document.createElement('div');
+                stateDiv.className = 'state';
+                stateDiv.appendChild(createHighlightNode(col.state, search));
+
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'name';
+                nameDiv.title = col.name || '';
+                nameDiv.appendChild(createHighlightNode(col.name, search));
+
+                const dataDiv = document.createElement('div');
+                dataDiv.className = 'data';
+                dataDiv.title = col.data || '';
+                dataDiv.appendChild(formatDataNode(highlightTextNode(col.data, search)));
+
+                row.appendChild(dateDiv);
+                row.appendChild(sourceDiv);
+                row.appendChild(targetDiv);
+                row.appendChild(stateDiv);
+                row.appendChild(nameDiv);
+                row.appendChild(dataDiv);
+                console.appendChild(row);
+            });
+
+            console.querySelectorAll('.row div').forEach(cell => {
+                cell.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    let text = cell.cloneNode(true);
+                    const highlight = text.querySelector('.highlight');
+                    if (highlight) {
+                        highlight.replaceWith(highlight.textContent);
+                    }
+                    copyToClipboardRaw(text.textContent);
+                    const originalBg = cell.style.backgroundColor;
+                    cell.style.backgroundColor = '#238636';
+                    cell.style.color = '#fff';
+                    setTimeout(() => {
+                        cell.style.backgroundColor = originalBg;
+                        cell.style.color = '';
+                    }, 300);
+                });
+            });
+        }
+
+        function createHighlightNode(text, search) {
+            const fragment = document.createDocumentFragment();
+            const displayText = text || '-';
+
+            if (!search) {
+                fragment.textContent = displayText;
+                return fragment;
+            }
+
+            const regex = new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            const parts = displayText.split(regex);
+            for (let i = 0; i < parts.length; i++) {
+                if (regex.test(parts[i])) {
+                    const span = document.createElement('span');
+                    span.className = 'highlight';
+                    span.textContent = parts[i];
+                    fragment.appendChild(span);
+                } else {
+                    fragment.appendChild(document.createTextNode(parts[i]));
+                }
+            }
+            return fragment;
+        }
+
+        function highlightTextNode(text, search) {
+            if (!search || !text) return document.createTextNode(text || '');
+            const fragment = document.createDocumentFragment();
+            const regex = new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            const parts = text.split(regex);
+            for (let i = 0; i < parts.length; i++) {
+                if (regex.test(parts[i])) {
+                    const span = document.createElement('span');
+                    span.className = 'highlight';
+                    span.textContent = parts[i];
+                    fragment.appendChild(span);
+                } else {
+                    fragment.appendChild(document.createTextNode(parts[i]));
+                }
+            }
+            return fragment;
+        }
+
+        function formatData(text) {
+            if (!text) return '';
+            text = text.replace(/(X-[^\s,;]+)/g, '<span class="data-highlight-x">$1</span>');
+            text = text.replace(/(Called number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
+            text = text.replace(/(Caller's number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
+            return text;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        let currentJobId = null;
+        let pollInterval = null;
+        const MAX_POLL_TIME = 120000;
+        const POLL_INTERVAL = 2000;
+
+        async function pollJobStatus(jobId) {
+            const startTime = Date.now();
+
+            while (Date.now() - startTime < MAX_POLL_TIME) {
+                try {
+                    const res = await fetch(`/api/rlog/job/${jobId}`);
+                    const data = await res.json();
+
+                    if (data.success) {
+                        if (data.status === 'ready') {
+                            setStatus('OK');
+                            document.getElementById('lineCount').textContent = data.count || 0;
+
+                            if (data.columns && data.columns.length > 0) {
+                                allColumns = data.columns;
+                                const search = document.getElementById('console-search').value.toLowerCase();
+                                renderTable(allColumns, search);
+                            } else {
+                                document.getElementById('console').innerHTML = '<div class="empty">No data available for this session</div>';
+                            }
+                            return true;
+                        } else if (data.status === 'error') {
+                            setStatus('Error');
+                            const consoleEl = document.getElementById('console');
+                            consoleEl.innerHTML = '<div class="empty" style="color:#f85149">Error: ' + escapeHtml(data.error || 'unknown') + '</div>';
+                            return false;
+                        } else {
+                            setStatus(data.progress || 'Loading...', true);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Poll error:', e);
+                }
+
+                await new Promise(r => setTimeout(r, POLL_INTERVAL));
+            }
+
+            setStatus('Timeout après 2 minutes');
+            return false;
+        }
+
+        async function runCommandWithDispatch() {
+            setStatus('Initialisation du dispatch...', true);
+
+            try {
+                const res = await fetch('/api/rlog/session/detail/dispatch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: session, date: date })
+                });
+                const data = await res.json();
+
+                if (!data.success) {
+                    setStatus('Error: ' + (data.error || 'unknown'));
+                    return;
+                }
+
+                currentJobId = data.job_id;
+                await pollJobStatus(currentJobId);
+
+            } catch (e) {
+                setStatus('Network error: ' + e.message);
+                const consoleEl = document.getElementById('console');
+                consoleEl.innerHTML = '<div class="empty" style="color:#f85149">Network error: ' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        async function runCommand() {
+            await runCommandWithDispatch();
+        }
+
+        function filterConsole() {
+            const search = document.getElementById('console-search').value.toLowerCase();
+            if (!search) {
+                renderTable(allColumns, '');
+                return;
+            }
+            const filtered = allColumns.filter(col => {
+                return (col.date || '').toLowerCase().includes(search) ||
+                       (col.source || '').toLowerCase().includes(search) ||
+                       (col.target || '').toLowerCase().includes(search) ||
+                       (col.state || '').toLowerCase().includes(search) ||
+                       (col.name || '').toLowerCase().includes(search) ||
+                       (col.data || '').toLowerCase().includes(search);
+            });
+            renderTable(filtered, search);
+        }
+
+        function formatDataNode(fragment) {
+            const temp = document.createElement('span');
+            temp.appendChild(fragment);
+            let text = temp.innerHTML;
+            text = text.replace(/(X-[^\s,;]+)/g, '<span class="data-highlight-x">$1</span>');
+            text = text.replace(/(Called number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
+            text = text.replace(/(Caller's number[^\s,;]*)/gi, '<span class="data-highlight-called">$1</span>');
+            temp.innerHTML = text;
+            return temp;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            setTimeout(runCommand, 500);
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                e.preventDefault();
+                runCommand();
+            } else if (e.key === 'Escape') {
+                window.close();
+            }
+        });
+    </script>
+</body>
+</html>

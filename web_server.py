@@ -11,6 +11,7 @@ import threading
 import time
 import json
 import subprocess
+import re
 from datetime import datetime
 from typing import Dict, List
 import logging
@@ -19,6 +20,32 @@ import os
 
 # Import configuration
 from config import MYSQL_CONFIG, FLASK_CONFIG
+from get_users_and_calls import RlogDispatcher
+import threading
+
+# Global dispatch instance
+_rlog_dispatcher = None
+_dispatch_start_thread = None
+
+def get_rlog_dispatcher():
+    """Get or create the global RlogDispatcher instance"""
+    global _rlog_dispatcher
+    if _rlog_dispatcher is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        logs_dir = os.path.join(base_dir, "import_logs")
+        _rlog_dispatcher = RlogDispatcher.get_instance(logs_dir)
+    return _rlog_dispatcher
+
+def _start_dispatch_async():
+    """Start dispatch in background thread"""
+    global _dispatch_start_thread
+    try:
+        dispatcher = get_rlog_dispatcher()
+        if dispatcher.process is None:
+            dispatcher.launch()
+    except Exception as e:
+        logger.error(f"Error starting dispatch in background: {e}")
+    _dispatch_start_thread = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cccp")
@@ -537,40 +564,607 @@ def api_console_session():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/rlog_console")
+def rlog_console():
+    """RLOG console page for sessions from log files"""
+    return render_template("rlog_console.html")
+
+
+@app.route("/rlog_console_light")
+def rlog_console_light():
+    """RLOG console page for sessions from log files (light theme)"""
+    return render_template("rlog_console_light.html")
+
+
+@app.route("/api/rlog/status")
+def api_rlog_status():
+    """Get RlogDispatcher status"""
+    try:
+        dispatcher = get_rlog_dispatcher()
+        return jsonify({
+            "success": True,
+            "port": dispatcher.port,
+            "running": dispatcher.process is not None,
+            "loaded_days": list(dispatcher._loaded_days) if hasattr(dispatcher, '_loaded_days') else []
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/rlog/start", methods=["POST"])
+def api_rlog_start():
+    """Start the RlogDispatcher asynchronously"""
+    try:
+        dispatcher = get_rlog_dispatcher()
+        
+        if dispatcher.process is not None:
+            return jsonify({
+                "success": True,
+                "port": dispatcher.port,
+                "message": "Dispatch already running"
+            })
+        
+        # Start dispatch in background thread
+        global _dispatch_start_thread
+        if _dispatch_start_thread is None or not _dispatch_start_thread.is_alive():
+            _dispatch_start_thread = threading.Thread(target=_start_dispatch_async, daemon=True)
+            _dispatch_start_thread.start()
+        
+        return jsonify({
+            "success": True,
+            "port": dispatcher.port,
+            "message": "Dispatch starting in background..."
+        })
+    except Exception as e:
+        logger.error(f"Error starting dispatch: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/rlog/stop", methods=["POST"])
+def api_rlog_stop():
+    """Stop the RlogDispatcher"""
+    try:
+        global _rlog_dispatcher
+        if _rlog_dispatcher:
+            _rlog_dispatcher.stop()
+            _rlog_dispatcher = None
+        return jsonify({"success": True, "message": "Dispatch stopped"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/rlog/sessions")
+def api_rlog_sessions():
+    """Get call sessions from log files using direct parsing (dispatch for call events)"""
+    try:
+        import subprocess
+        from get_users_and_calls import get_rlog_sessions_direct
+        
+        date = request.args.get("date", "2026-02-08")
+        use_dispatch = request.args.get("use_dispatch", "false").lower() == "true"
+        logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
+        
+        if use_dispatch:
+            port = 35000
+            
+            cmd = [
+                "/app/ccenter_report",
+                "-login", "admin",
+                "-password", "admin",
+                "-server", "127.0.0.1",
+                str(port),
+                "-list",
+                "-path", "/ccxml",
+                "-field", "sessions",
+                "-fields", "row.object_id;row.session_id;row.create_date",
+                "-separator", "|"
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, encoding="latin-1", timeout=10)
+            
+            sessions = {}
+            for line in result.stdout.strip().split("\n"):
+                if line.strip() and "|" in line:
+                    parts = line.strip().split("|")
+                    if len(parts) >= 3:
+                        object_id = parts[0].strip()
+                        session_id = parts[1].strip()
+                        create_date = parts[2].strip()
+                        
+                        # Only keep call sessions (session_*, not user_*)
+                        if session_id and session_id.startswith("session_"):
+                            sessions[session_id] = {
+                                "id": session_id,
+                                "object_id": object_id,
+                                "type": "call_session",
+                                "caller": "",
+                                "called": "",
+                                "create_date": create_date
+                            }
+            
+            if sessions:
+                return jsonify({
+                    "success": True,
+                    "date": date,
+                    "sessions": sessions,
+                    "using_dispatch": True
+                })
+            else:
+                logger.warning("Dispatch returned empty sessions, falling back to direct parsing")
+        
+        # Use direct parsing which extracts caller/called from SIP URIs
+        result = get_rlog_sessions_direct(logs_dir, date)
+        sessions = result.get("sessions", {})
+        
+        # Filter to only call sessions (session_*, not user_*)
+        call_sessions = {}
+        for sid, info in sessions.items():
+            if sid.startswith("session_"):
+                call_sessions[sid] = info
+        
+        return jsonify({
+            "success": True,
+            "date": date,
+            "sessions": call_sessions,
+            "using_direct_parsing": True
+        })
+            
+    except subprocess.TimeoutExpired:
+        logger.warning("Dispatch query timed out, falling back to direct parsing")
+        result = get_rlog_sessions_direct(logs_dir, date)
+        sessions = result.get("sessions", {})
+        call_sessions = {k: v for k, v in sessions.items() if k.startswith("session_")}
+        return jsonify({
+            "success": True,
+            "date": date,
+            "sessions": call_sessions,
+            "using_direct_parsing": True,
+            "dispatch_note": "DispatchTimeout"
+        })
+    except Exception as dispatch_error:
+        logger.warning(f"Dispatch failed ({dispatch_error}), falling back to direct parsing")
+        result = get_rlog_sessions_direct(logs_dir, date)
+        sessions = result.get("sessions", {})
+        call_sessions = {k: v for k, v in sessions.items() if k.startswith("session_")}
+        return jsonify({
+            "success": True,
+            "date": date,
+            "sessions": call_sessions,
+            "using_direct_parsing": True
+        })
+            
+    except Exception as e:
+        logger.error(f"Error getting sessions: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/rlog/session/detail", methods=["GET"])
+def api_rlog_session_detail():
+    """Get detailed events for a specific session using dispatch (with fallback to direct)"""
+    import subprocess
+    
+    session_id = request.args.get("session", "")
+    date = request.args.get("date", "2026-02-08")
+    use_direct = request.args.get("use_direct", "false").lower() == "true"
+    
+    if not session_id:
+        return jsonify({"success": False, "error": "Session ID required"}), 400
+    
+    def reformat_date(line):
+        """Reformat date from French format to ISO format"""
+        match = re.search(r"(\d{2}:\d{2}:\d{2}) le (\d{2}/\d{2}/\d{4})", line)
+        if match:
+            time_part = match.group(1)
+            date_part = match.group(2)
+            day, month, year = date_part.split("/")
+            return f"[{year}-{month}-{day} {time_part}]" + line[match.end():]
+        return line
+    
+    try:
+        from get_users_and_calls import get_rlog_session_detail_direct
+        
+        logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
+        
+        if use_direct:
+            result = get_rlog_session_detail_direct(logs_dir, session_id, date)
+            
+            if not result.get("success"):
+                return jsonify(result), 404 if "not found" in result.get("error", "") else 500
+            
+            output_columns = []
+            output_lines = []
+            
+            for event in result.get("events", []):
+                output_columns.append({
+                    "date": event.get("date", ""),
+                    "source": event.get("source", ""),
+                    "target": event.get("target", ""),
+                    "state": event.get("state", ""),
+                    "name": event.get("name", ""),
+                    "data": event.get("data", "")
+                })
+                output_lines.append(f"{event.get('date', '')}   {event.get('source', '')}   {event.get('target', '')}   {event.get('state', '')}   {event.get('name', '')}   {event.get('data', '')}")
+            
+            return jsonify({
+                "success": True,
+                "session": session_id,
+                "object_id": result.get("object_id", ""),
+                "date": date,
+                "running": True,
+                "count": len(output_lines),
+                "output": output_lines,
+                "columns": output_columns,
+                "using_direct_parsing": True,
+                "note": "Mode direct parsing"
+            })
+        
+        try:
+            port = 35000
+            
+            # First, find the object_id for the session
+            cmd = [
+                "/app/ccenter_report",
+                "-login", "admin",
+                "-password", "admin",
+                "-server", "127.0.0.1",
+                str(port),
+                "-list",
+                "-path", "/ccxml",
+                "-field", "sessions",
+                "-fields", "row.object_id;row.session_id",
+                "-separator", "|"
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, encoding="latin-1", timeout=10)
+            
+            object_id = None
+            for line in result.stdout.strip().split("\n"):
+                if session_id in line and "|" in line:
+                    parts = line.strip().split("|")
+                    if len(parts) >= 2 and parts[0].isdigit():
+                        object_id = parts[0]
+                        break
+            
+            if not object_id:
+                raise Exception(f"Session '{session_id}' not found")
+            
+            # Now get the events for this session
+            cmd = [
+                "/app/ccenter_report",
+                "-login", "admin",
+                "-password", "admin",
+                "-server", "127.0.0.1",
+                str(port),
+                "-list",
+                "-path", "/dispatch",
+                "-field", "events",
+                "-fields", "row.date;row.source;row.target;row.state;row.name;row.string_data",
+                "-object", object_id,
+                "-separator", "|"
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, encoding="latin-1", timeout=10)
+            
+            output_lines = []
+            output_columns = []
+            
+            for line in result.stdout.strip().split("\n"):
+                if line.strip() and "|" in line:
+                    parts = line.strip().split("|")
+                    if len(parts) >= 6:
+                        col_date = reformat_date(parts[0].strip())
+                        col_source = parts[1].strip() if len(parts) > 1 else ""
+                        col_target = parts[2].strip() if len(parts) > 2 else ""
+                        col_state = parts[3].strip() if len(parts) > 3 else ""
+                        col_name = parts[4].strip() if len(parts) > 4 else ""
+                        col_data = "|".join(parts[5:]).strip() if len(parts) > 5 else ""
+                        
+                        output_columns.append({
+                            "date": col_date,
+                            "source": col_source,
+                            "target": col_target,
+                            "state": col_state,
+                            "name": col_name,
+                            "data": col_data
+                        })
+                        output_lines.append(f"{col_date}   {col_source}   {col_target}   {col_state}   {col_name}   {col_data}")
+            
+            if output_lines:
+                return jsonify({
+                    "success": True,
+                    "session": session_id,
+                    "object_id": object_id,
+                    "date": date,
+                    "running": True,
+                    "count": len(output_lines),
+                    "output": output_lines,
+                    "columns": output_columns,
+                    "using_dispatch": True
+                })
+            else:
+                raise Exception("No events returned from dispatch")
+            
+        except subprocess.TimeoutExpired:
+            logger.warning("Dispatch query timed out, falling back to direct parsing")
+            result = get_rlog_session_detail_direct(logs_dir, session_id, date)
+            
+            if not result.get("success"):
+                return jsonify(result), 404 if "not found" in result.get("error", "") else 500
+            
+            output_columns = []
+            output_lines = []
+            
+            for event in result.get("events", []):
+                output_columns.append({
+                    "date": event.get("date", ""),
+                    "source": event.get("source", ""),
+                    "target": event.get("target", ""),
+                    "state": event.get("state", ""),
+                    "name": event.get("name", ""),
+                    "data": event.get("data", "")
+                })
+                output_lines.append(f"{event.get('date', '')}   {event.get('source', '')}   {event.get('target', '')}   {event.get('state', '')}   {event.get('name', '')}   {event.get('data', '')}")
+            
+            return jsonify({
+                "success": True,
+                "session": session_id,
+                "object_id": result.get("object_id", ""),
+                "date": date,
+                "running": True,
+                "count": len(output_lines),
+                "output": output_lines,
+                "columns": output_columns,
+                "using_direct_parsing": True,
+                "dispatch_note": "DispatchTimeout"
+            })
+            
+        except Exception as dispatch_error:
+            logger.warning(f"Dispatch failed ({dispatch_error}), falling back to direct parsing")
+            result = get_rlog_session_detail_direct(logs_dir, session_id, date)
+            
+            if not result.get("success"):
+                return jsonify(result), 404 if "not found" in result.get("error", "") else 500
+            
+            output_columns = []
+            output_lines = []
+            
+            for event in result.get("events", []):
+                output_columns.append({
+                    "date": event.get("date", ""),
+                    "source": event.get("source", ""),
+                    "target": event.get("target", ""),
+                    "state": event.get("state", ""),
+                    "name": event.get("name", ""),
+                    "data": event.get("data", "")
+                })
+                output_lines.append(f"{event.get('date', '')}   {event.get('source', '')}   {event.get('target', '')}   {event.get('state', '')}   {event.get('name', '')}   {event.get('data', '')}")
+            
+            return jsonify({
+                "success": True,
+                "session": session_id,
+                "object_id": result.get("object_id", ""),
+                "date": date,
+                "running": True,
+                "count": len(output_lines),
+                "output": output_lines,
+                "columns": output_columns,
+                "using_direct_parsing": True,
+                "dispatch_error": str(dispatch_error)
+            })
+            
+    except Exception as e:
+        logger.error(f"RlogDispatcher error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)})
+
+
+import uuid
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+_job_store = {}
+_job_executor = ThreadPoolExecutor(max_workers=5)
+
+
+def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
+    """Exécute le job de dispatch dans un thread séparé"""
+    try:
+        _job_store[job_id] = {
+            "status": "starting",
+            "progress": "Initialisation...",
+            "session_id": session_id,
+            "date": date,
+            "created_at": time.time()
+        }
+
+        from get_users_and_calls import RlogDispatcher
+
+        dispatcher = RlogDispatcher(logs_dir)
+
+        _job_store[job_id]["progress"] = "Lancement du dispatch..."
+        _job_store[job_id]["status"] = "loading"
+
+        port = dispatcher.launch(timeout=10)
+
+        day = date.replace("-", "_")
+        _job_store[job_id]["progress"] = f"Chargement du jour {date}..."
+
+        dispatcher._load_day(day)
+
+        _job_store[job_id]["progress"] = "Recherche de la session..."
+
+        result = dispatcher.query("sessions")
+
+        object_id = None
+        for line in result.get("stdout", "").split("\n"):
+            if session_id in line and "|" in line:
+                parts = line.strip().split("|")
+                if len(parts) >= 2 and parts[0].isdigit():
+                    object_id = parts[0]
+                    break
+
+        if not object_id:
+            _job_store[job_id]["status"] = "error"
+            _job_store[job_id]["error"] = f"Session '{session_id}' non trouvée"
+            dispatcher.stop()
+            return
+
+        _job_store[job_id]["progress"] = "Récupération des événements..."
+        _job_store[job_id]["object_id"] = object_id
+
+        events_result = dispatcher.query("session_detail", object_id=object_id)
+
+        dispatcher.stop()
+
+        output_lines = []
+        output_columns = []
+
+        for event in events_result.get("events", []):
+            if isinstance(event, dict):
+                output_columns.append({
+                    "date": event.get("date", ""),
+                    "source": event.get("source", ""),
+                    "target": event.get("target", ""),
+                    "state": event.get("state", ""),
+                    "name": event.get("name", ""),
+                    "data": event.get("data", "")
+                })
+                output_lines.append(f"{event.get('date', '')}   {event.get('source', '')}   {event.get('target', '')}   {event.get('state', '')}   {event.get('name', '')}   {event.get('data', '')}")
+            else:
+                line = str(event)
+                output_lines.append(line)
+                parts = line.split("|")
+                if len(parts) >= 5:
+                    output_columns.append({
+                        "date": parts[0],
+                        "source": parts[1],
+                        "target": parts[2],
+                        "state": parts[3],
+                        "name": parts[4],
+                        "data": "|".join(parts[5:]) if len(parts) > 5 else ""
+                    })
+
+        _job_store[job_id]["status"] = "ready"
+        _job_store[job_id]["progress"] = f"Terminé ({len(output_lines)} événements)"
+        _job_store[job_id]["result"] = {
+            "success": True,
+            "session": session_id,
+            "object_id": object_id,
+            "date": date,
+            "running": True,
+            "count": len(output_lines),
+            "output": output_lines,
+            "columns": output_columns,
+            "using_dispatch": True
+        }
+
+    except Exception as e:
+        _job_store[job_id]["status"] = "error"
+        _job_store[job_id]["error"] = str(e)
+        logger.error(f"Dispatch job error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+
+@app.route("/api/rlog/session/detail/dispatch", methods=["POST"])
+def api_rlog_session_detail_dispatch():
+    """Lance un job de dispatch pour récupérer les détails d'une session"""
+    session_id = request.json.get("session_id", "")
+    date = request.json.get("date", "2026-02-08")
+
+    if not session_id:
+        return jsonify({"success": False, "error": "Session ID required"}), 400
+
+    job_id = str(uuid.uuid4())
+
+    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
+
+    _job_executor.submit(_run_dispatch_job, job_id, logs_dir, session_id, date)
+
+    return jsonify({
+        "success": True,
+        "job_id": job_id,
+        "status": "starting",
+        "session_id": session_id,
+        "date": date
+    })
+
+
+@app.route("/api/rlog/job/<job_id>")
+def api_rlog_job_status(job_id: str):
+    """Récupère le statut d'un job"""
+    if job_id not in _job_store:
+        return jsonify({"success": False, "error": "Job not found"}), 404
+
+    job = _job_store[job_id]
+
+    response = {
+        "success": True,
+        "job_id": job_id,
+        "status": job["status"],
+        "progress": job["progress"],
+        "session_id": job.get("session_id"),
+        "date": job.get("date")
+    }
+
+    if job["status"] == "ready":
+        response.update(job["result"])
+        response.pop("result", None)
+    elif job["status"] == "error":
+        response["error"] = job.get("error", "Unknown error")
+        response.pop("result", None)
+
+    return jsonify(response)
+
+
+@app.route("/api/rlog/job/<job_id>", methods=["DELETE"])
+def api_rlog_job_cancel(job_id: str):
+    """Annule un job en cours"""
+    if job_id not in _job_store:
+        return jsonify({"success": False, "error": "Job not found"}), 404
+
+    job = _job_store[job_id]
+    if job["status"] in ("starting", "loading"):
+        job["status"] = "cancelled"
+        job["progress"] = "Job annulé"
+
+    return jsonify({"success": True, "status": "cancelled"})
+
+
 @app.route("/api/protocol")
 def api_protocol():
     """Get protocol specification"""
-    return jsonify(
-        {
-            "name": "CCCP Explorer Protocol",
-            "version": "1.0",
-            "description": "Based on consistent_explorer.exe decompilation",
-            "message_types": {
-                "103": "INITIALIZE",
-                "10000": "LOGIN",
-                "10009": "QUERY_LIST",
-                "10049": "USE_DEFAULT_NAMESPACES_INDEX",
-                "20000": "CONNECTION_OK",
-                "20001": "LOGIN_OK",
-                "20002": "LOGIN_FAILED",
-                "20003": "RESULT",
-                "20007": "LIST_RESPONSE",
-                "20008": "OBJECT_RESPONSE",
-                "20009": "SERVER_EVENT",
-                "20012": "START_RESULT",
-                "20038": "USE_DEFAULT_NAMESPACES_INDEX_OK",
-            },
-            "event_fields": [
-                "session_id",
-                "source",
-                "target",
-                "delay",
-                "event_name",
-                "event_object",
-            ],
-            "binary_format": "[LENGTH(4)][MESSAGE_ID(4)][PAYLOAD...]",
-        }
-    )
+    return jsonify({
+        "name": "CCCP Explorer Protocol",
+        "version": "1.0",
+        "description": "Based on consistent_explorer.exe decompilation",
+        "message_types": {
+            "103": "INITIALIZE",
+            "10000": "LOGIN",
+            "10009": "QUERY_LIST",
+            "10049": "USE_DEFAULT_NAMESPACES_INDEX",
+            "20000": "CONNECTION_OK",
+            "20001": "LOGIN_OK",
+            "20002": "LOGIN_FAILED",
+            "20003": "RESULT",
+            "20007": "LIST_RESPONSE",
+            "20008": "OBJECT_RESPONSE",
+            "20009": "SERVER_EVENT",
+            "20012": "START_RESULT",
+            "20038": "USE_DEFAULT_NAMESPACES_INDEX_OK",
+        },
+        "event_fields": [
+            "session_id",
+            "source",
+            "target",
+            "delay",
+            "event_name",
+            "event_object",
+        ],
+        "binary_format": "[LENGTH(4)][MESSAGE_ID(4)][PAYLOAD...]",
+    })
+
 
 
 if __name__ == "__main__":
