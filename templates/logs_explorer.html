@@ -244,9 +244,54 @@
         .log-compressed {
             color: var(--warning-color);
         }
+        .sessions-toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .sessions-toolbar input {
+            flex: 1;
+            padding: 6px 10px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 12px;
+        }
+        .sessions-toolbar select {
+            padding: 6px 10px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 12px;
+        }
+        .sessions-header {
+            display: grid;
+            grid-template-columns: 140px 120px 120px 1fr;
+            gap: 0;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+        .sessions-header div {
+            padding: 8px 12px;
+            border-right: 1px solid var(--border-color);
+        }
+        .sessions-header div:last-child {
+            border-right: none;
+        }
         .session-item {
             display: grid;
-            grid-template-columns: 140px 1fr 100px 80px;
+            grid-template-columns: 140px 120px 120px 1fr;
             gap: 0;
             border-bottom: 1px solid var(--border-color);
             line-height: 1.5;
@@ -272,8 +317,8 @@
         }
         .session-time { color: var(--text-muted); }
         .session-id { color: var(--accent-color); }
-        .session-type { color: var(--purple-color); }
-        .session-caller { color: var(--warning-color); }
+        .session-caller { color: var(--success-color); font-weight: 500; }
+        .session-called { color: var(--warning-color); font-weight: 500; }
         .controls {
             display: flex;
             gap: 8px;
@@ -368,6 +413,92 @@
             background: var(--error-bg);
             color: var(--error-color);
         }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-center {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            min-width: 300px;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-color);
+            white-space: nowrap;
+        }
+        .selector-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .selector-group label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        .selector-group select,
+        .selector-group input {
+            padding: 4px 8px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 11px;
+        }
+        .global-search {
+            display: flex;
+            gap: 6px;
+        }
+        .global-search input {
+            padding: 4px 8px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 11px;
+            width: 250px;
+        }
+        .global-search input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+        .global-search-results {
+            margin-bottom: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .global-search-results .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .global-search-results .panel-header button {
+            margin-left: auto;
+        }
     </style>
 </head>
 <body data-theme="dark">
@@ -392,8 +523,15 @@
                     <span>NFS unavailable</span>
                 </div>
             </div>
-            
-            <div class="header-right" style="display: flex; gap: 16px; align-items: center;">
+
+            <div class="header-center">
+                <div class="global-search">
+                    <input type="text" id="globalSearch" placeholder="🔍 Numéro, projet, date..." onkeypress="if(event.key==='Enter') performGlobalSearch()">
+                    <button class="btn" onclick="performGlobalSearch()" id="globalSearchBtn">Rechercher</button>
+                </div>
+            </div>
+
+            <div class="header-right">
                 <div class="theme-selector">
                     <label for="theme-select">Theme:</label>
                     <select id="theme-select" onchange="changeTheme()">
@@ -425,7 +563,24 @@
         <div class="progress-bar">
             <div class="progress-bar-fill" id="progressBar" style="width: 0%"></div>
         </div>
-        
+
+        <div class="global-search-results" id="globalSearchResults" style="display: none;">
+            <div class="panel-header">
+                <span>Résultats de recherche globale</span>
+                <span class="count" id="globalSearchCount">0</span>
+                <button class="btn btn-small" onclick="closeGlobalSearch()">✕</button>
+            </div>
+            <div class="sessions-header">
+                <div class="col-date">Projet</div>
+                <div class="col-date">Date</div>
+                <div class="col-caller">Caller</div>
+                <div class="col-called">Called</div>
+                <div class="col-id">Session</div>
+            </div>
+            <div class="panel-content" id="globalSearchPanel">
+            </div>
+        </div>
+
         <div class="main-content">
             <div class="panel panel-logs">
                 <div class="panel-header">
@@ -446,6 +601,21 @@
                 <div class="panel-header">
                     <span>Call Sessions</span>
                     <span class="count" id="sessionsPanelCount">0</span>
+                </div>
+                <div class="sessions-toolbar">
+                    <input type="text" id="phoneSearch" placeholder="🔍 Rechercher un numéro..." oninput="filterSessions()">
+                    <select id="sortSessions" onchange="filterSessions()">
+                        <option value="date_desc">Date ↓</option>
+                        <option value="date_asc">Date ↑</option>
+                        <option value="caller">Caller</option>
+                        <option value="called">Called</option>
+                    </select>
+                </div>
+                <div class="sessions-header">
+                    <div class="col-date">Date</div>
+                    <div class="col-caller">Caller</div>
+                    <div class="col-called">Called</div>
+                    <div class="col-id">Session</div>
                 </div>
                 <div class="panel-content" id="sessionsPanel">
                     <div class="empty">No sessions loaded</div>
@@ -757,7 +927,7 @@
 
         async function loadSessions() {
             const date = document.getElementById('dateInput').value;
-            
+
             if (!date) return;
 
             setStatus('Loading sessions...', 30);
@@ -766,9 +936,10 @@
             try {
                 const res = await fetch(`/api/rlog/sessions?date=${date}`);
                 const data = await res.json();
-                
+
                 if (data.success) {
                     sessions = data.sessions || {};
+                    window._allSessions = sessions;  // Store for global search navigation
                     renderSessions();
                     setStatus(`Loaded ${Object.keys(sessions).length} sessions`);
                 } else {
@@ -784,11 +955,42 @@
         function renderSessions() {
             const panel = document.getElementById('sessionsPanel');
             panel.innerHTML = '';
-            
-            const sessionList = Object.values(sessions);
-            
+
+            const searchTerm = document.getElementById('phoneSearch').value.toLowerCase();
+            const sortBy = document.getElementById('sortSessions').value;
+
+            let sessionList = Object.values(sessions);
+
+            // Filter by phone number
+            if (searchTerm) {
+                sessionList = sessionList.filter(s =>
+                    (s.caller && s.caller.toLowerCase().includes(searchTerm)) ||
+                    (s.called && s.called.toLowerCase().includes(searchTerm)) ||
+                    (s.id && s.id.toLowerCase().includes(searchTerm))
+                );
+            }
+
+            // Sort sessions
+            sessionList.sort((a, b) => {
+                switch (sortBy) {
+                    case 'date_asc':
+                        return (a.create_date || '').localeCompare(b.create_date || '');
+                    case 'date_desc':
+                        return (b.create_date || '').localeCompare(a.create_date || '');
+                    case 'caller':
+                        return (a.caller || '').localeCompare(b.caller || '');
+                    case 'called':
+                        return (a.called || '').localeCompare(b.called || '');
+                    default:
+                        return 0;
+                }
+            });
+
             if (sessionList.length === 0) {
-                panel.innerHTML = '<div class="empty">No sessions found for this date</div>';
+                const msg = searchTerm
+                    ? `Aucune session trouvée pour "${searchTerm}"`
+                    : 'No sessions found for this date';
+                panel.innerHTML = `<div class="empty">${msg}</div>`;
                 document.getElementById('sessionCount').textContent = '0';
                 document.getElementById('sessionsPanelCount').textContent = '0';
                 return;
@@ -799,9 +1001,9 @@
                 div.className = 'session-item';
                 div.innerHTML = `
                     <div class="session-time">${s.create_date || '-'}</div>
-                    <div class="session-id" title="${s.id}">${s.id}</div>
-                    <div class="session-type">${s.type || 'call'}</div>
                     <div class="session-caller">${s.caller || '-'}</div>
+                    <div class="session-called">${s.called || '-'}</div>
+                    <div class="session-id" title="${s.id}">${s.id}</div>
                 `;
                 div.onclick = () => selectSession(s, div);
                 panel.appendChild(div);
@@ -810,6 +1012,93 @@
             document.getElementById('sessionCount').textContent = sessionList.length;
             document.getElementById('sessionsPanelCount').textContent = sessionList.length;
         }
+
+        function filterSessions() {
+            renderSessions();
+        }
+
+        async function performGlobalSearch() {
+            const searchTerm = document.getElementById('globalSearch').value.trim();
+
+            if (!searchTerm) {
+                closeGlobalSearch();
+                return;
+            }
+
+            setStatus(`🔍 Recherche globale: "${searchTerm}"...`);
+
+            try {
+                const res = await fetch(`/api/rlog/search?term=${encodeURIComponent(searchTerm)}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    renderGlobalSearchResults(data.results || []);
+                    setStatus(`🔍 ${data.count || 0} résultats pour "${searchTerm}"`);
+                } else {
+                    setStatus('Erreur: ' + (data.error || 'inconnue'));
+                }
+            } catch (e) {
+                setStatus('Erreur: ' + e.message);
+            }
+        }
+
+        function renderGlobalSearchResults(results) {
+            const panel = document.getElementById('globalSearchPanel');
+            const container = document.getElementById('globalSearchResults');
+            const countEl = document.getElementById('globalSearchCount');
+
+            countEl.textContent = results.length;
+
+            if (results.length === 0) {
+                panel.innerHTML = '<div class="empty">Aucun résultat trouvé</div>';
+                container.style.display = 'block';
+                return;
+            }
+
+            panel.innerHTML = '';
+
+            results.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'session-item';
+                div.innerHTML = `
+                    <div class="session-time">${r.project || '-'}</div>
+                    <div class="session-time">${r.date || '-'}</div>
+                    <div class="session-caller">${r.caller || '-'}</div>
+                    <div class="session-called">${r.called || '-'}</div>
+                    <div class="session-id" title="${r.id}">${r.id}</div>
+                `;
+                div.onclick = () => {
+                    // Select project and date, then show session
+                    document.getElementById('projectSelect').value = r.project;
+                    onProjectChange().then(() => {
+                        document.getElementById('dateInput').value = r.date;
+                        onDateChange().then(() => {
+                            // Load sessions and find the one
+                            loadSessions().then(() => {
+                                sessions = window._allSessions || {};
+                                const session = sessions[r.id];
+                                if (session) {
+                                    selectedSession = session;
+                                    document.getElementById('consoleBtn').disabled = false;
+                                }
+                            });
+                        });
+                    });
+                    closeGlobalSearch();
+                };
+                panel.appendChild(div);
+            });
+
+            container.style.display = 'block';
+        }
+
+        function closeGlobalSearch() {
+            document.getElementById('globalSearchResults').style.display = 'none';
+            document.getElementById('globalSearch').value = '';
+        }
+
+        // Store all sessions for navigation
+        window._allSessions = {};
 
         function selectSession(session, el) {
             document.querySelectorAll('.session-item').forEach(s => s.classList.remove('selected'));

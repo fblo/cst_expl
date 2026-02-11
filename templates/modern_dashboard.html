@@ -782,6 +782,14 @@
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">📁 Logs Explorer</span>
+                    <div style="display: flex; gap: 12px; align-items: center; flex: 1; justify-content: flex-end;">
+                        <div class="global-search" style="display: flex; gap: 8px;">
+                            <input type="text" id="logsGlobalSearch" placeholder="🔍 Numéro, projet, date..." 
+                                style="padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 220px;"
+                                onkeypress="if(event.key==='Enter') performLogsGlobalSearch()">
+                            <button class="btn btn-secondary" onclick="performLogsGlobalSearch()" style="padding: 6px 12px;">Rechercher</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body" style="padding: 16px;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
@@ -1220,8 +1228,16 @@
             if (!date) {
                 console.log('[LogsExplorer] No date selected');
                 document.getElementById('logs-sessions-list').innerHTML = '<div class="empty-state">Select a date first</div>';
+                window.logsSessions = {};
+                window.logsIsGlobalSearch = false;
+                window.logsSearchTerm = '';
                 return;
             }
+
+            // Reset global search when loading new sessions
+            window.logsIsGlobalSearch = false;
+            window.logsSearchTerm = '';
+
             console.log('[LogsExplorer] Loading sessions for date:', date);
             try {
                 const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
@@ -1231,26 +1247,41 @@
                 if (data.success) {
                     const sessions = data.sessions || {};
                     console.log('[LogsExplorer] Found', Object.keys(sessions).length, 'sessions');
+                    window.logsSessions = sessions;
+                    window.logsLocalSessions = sessions;
                     renderLogsSessions(sessions);
                 } else {
+                    window.logsSessions = {};
+                    window.logsLocalSessions = {};
                     document.getElementById('logs-sessions-list').innerHTML =
                         '<div class="empty-state">' + (data.error || 'Error loading sessions') + '</div>';
                 }
             } catch (e) {
+                window.logsSessions = {};
+                window.logsLocalSessions = {};
                 console.error('[LogsExplorer] Error loading sessions:', e);
                 document.getElementById('logs-sessions-list').innerHTML = '<div class="empty-state">Error loading sessions</div>';
             }
         }
 
+        // Alias for compatibility
+        const loadLogsSessions = loadSessions;
+
         function renderLogsSessions(sessions) {
             const container = document.getElementById('logs-sessions-list');
-            const sessionList = Object.values(sessions);
             const currentDate = document.getElementById('logs-date').value;
+            const isGlobalSearch = window.logsIsGlobalSearch === true;
+            const searchTerm = window.logsSearchTerm || '';
 
-            document.getElementById('sessions-count').textContent = sessionList.length + ' sessions';
+            let sessionList = Object.values(sessions);
+
+            document.getElementById('sessions-count').textContent = sessionList.length + (isGlobalSearch ? ' résultats' : ' sessions');
 
             if (sessionList.length === 0) {
-                container.innerHTML = '<div class="empty-state">No sessions found for this date</div>';
+                const msg = isGlobalSearch 
+                    ? `Aucun résultat pour "${searchTerm}"`
+                    : 'No sessions found for this date';
+                container.innerHTML = `<div class="empty-state" style="padding: 40px;">${msg}</div>`;
                 return;
             }
 
@@ -1258,22 +1289,79 @@
                 sessionList.map(session => {
                     const shortId = session.id ? session.id.split('@')[0] + '@...' : '-';
                     const type = session.type || 'call';
-                    const caller = session.caller || '-';
-                    const called = session.called || '-';
+                    const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? session.caller : '-';
+                    const called = (session.called && session.called.toLowerCase() !== 'undefined') ? session.called : '-';
                     const createDate = session.create_date || '-';
+                    const project = session.project || (isGlobalSearch ? window.logsSearchProject : '');
+
+                    const showPhones = caller !== '-' || called !== '-';
 
                     return `<div style="padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${currentDate}')" title="Click to view session details">
                         <div style="color: var(--purple-color); font-weight: 600; font-size: 11px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             ${escapeHtml(session.id)}
                         </div>
                         <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">${escapeHtml(createDate)}</div>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 10px;">
-                            <div><span style="color: var(--text-secondary);">Type:</span> <span style="color: var(--accent-color);">${escapeHtml(type)}</span></div>
-                            <div><span style="color: var(--text-secondary);">Caller:</span> <span style="color: var(--success-color);">${escapeHtml(caller)}</span></div>
-                            <div><span style="color: var(--text-secondary);">Called:</span> <span style="color: var(--warning-color);">${escapeHtml(called)}</span></div>
+                        <div style="display: grid; grid-template-columns: ${isGlobalSearch ? (showPhones ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)') : (showPhones ? 'repeat(3, 1fr)' : '1fr')}; gap: 8px; font-size: 10px;">
+                            ${isGlobalSearch ? `<div><span style="color: var(--text-secondary);">Projet:</span> <span style="color: var(--accent-color);">${escapeHtml(project)}</span></div>` : ''}
+                            ${showPhones ? `<div><span style="color: var(--text-secondary);">Caller:</span> <span style="color: var(--success-color);">${escapeHtml(caller)}</span></div>` : ''}
+                            ${showPhones ? `<div><span style="color: var(--text-secondary);">Called:</span> <span style="color: var(--warning-color);">${escapeHtml(called)}</span></div>` : ''}
                         </div>
                     </div>`;
                 }).join('') + '</div>';
+        }
+
+        async function performLogsGlobalSearch() {
+            const searchTerm = document.getElementById('logsGlobalSearch').value.trim();
+
+            if (!searchTerm) {
+                // Reset to local sessions
+                window.logsIsGlobalSearch = false;
+                window.logsSearchTerm = '';
+                if (window.logsLocalSessions) {
+                    renderLogsSessions(window.logsLocalSessions);
+                }
+                return;
+            }
+
+            const statusEl = document.getElementById('progress-status');
+            const progressEl = document.getElementById('progress-bar');
+            const container = document.getElementById('progress-container');
+            container.style.display = 'block';
+            progressEl.style.width = '50%';
+            statusEl.textContent = `🔍 Recherche: "${searchTerm}"...`;
+
+            try {
+                const res = await fetch(`/api/rlog/search?term=${encodeURIComponent(searchTerm)}`);
+                const data = await res.json();
+
+                progressEl.style.width = '100%';
+
+                if (data.success) {
+                    // Convert results to session-like objects
+                    const results = (data.results || []).map(r => ({
+                        id: r.id,
+                        object_id: r.object_id,
+                        type: 'call_session',
+                        caller: r.caller || '',
+                        called: r.called || '',
+                        create_date: r.create_date || '',
+                        project: r.project || ''
+                    }));
+                    
+                    window.logsIsGlobalSearch = true;
+                    window.logsSearchTerm = searchTerm;
+                    window.logsLocalSessions = window.logsSessions || {};  // Keep local sessions
+                    window.logsSessions = {};
+                    results.forEach(s => { window.logsSessions[s.id] = s; });
+                    
+                    renderLogsSessions(window.logsSessions);
+                    statusEl.textContent = `🔍 ${data.count || 0} résultats pour "${searchTerm}"`;
+                } else {
+                    statusEl.textContent = 'Erreur: ' + (data.error || 'inconnue');
+                }
+            } catch (e) {
+                statusEl.textContent = 'Erreur: ' + e.message;
+            }
         }
 
         function openRlogConsole(sessionId, date) {
@@ -1633,26 +1721,35 @@
                 } else if (data.status === 'done' || data.status === 'done_with_errors') {
                     progressBar.style.width = '100%';
                     progressBar.style.background = 'var(--success-color)';
-                    
+
                     const copied = data.copied || 0;
                     const decompressed = data.decompressed || 0;
                     const dispatchPort = data.dispatch_port || null;
-                    
-                    let msg = `✅ Terminé: ${copied} fichiers copiés, ${decompressed} décompressés`;
-                    if (dispatchPort) {
-                        msg += ` | Dispatch sur port ${dispatchPort}`;
+                    const isCached = data.cached === true;
+
+                    let msg;
+                    if (isCached) {
+                        msg = `✅ Logs déjà récupérés: ${copied} fichiers`;
+                        if (dispatchPort) {
+                            msg += ` | Snapshot sur port ${dispatchPort}`;
+                        }
+                    } else {
+                        msg = `✅ Terminé: ${copied} fichiers copiés, ${decompressed} décompressés`;
+                        if (dispatchPort) {
+                            msg += ` | Dispatch sur port ${dispatchPort}`;
+                        }
                     }
                     if (data.dispatch_error) {
                         msg += ` | ⚠️ Dispatch: ${data.dispatch_error}`;
                     }
-                    
+
                     completionStatus.innerHTML = msg;
                     completionStatus.style.display = 'block';
                     completionStatus.style.color = 'var(--success-color)';
-                    
+
                     btn.disabled = false;
                     btn.innerHTML = '📥 Retrieve & Load';
-                    
+
                     // Automatically load sessions
                     loadSessions();
                 } else if (data.status === 'error') {
