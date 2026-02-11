@@ -1,0 +1,21 @@
+ERROR:cccp:MySQL error: 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'p.name AS project, 
+            v.cccip, 
+            g.ccc_dispatch_port, 
+    ' at line 1
+======================================================================
+CCCP Explorer - Live Dashboard
+======================================================================
+Loading servers list from MySQL...
+Loaded 0 projects
+
+Server running: http://0.0.0.0:5000
+  - Go to / for project selection
+  - Go to /cst_explorer/PROJECT_NAME to access a project directly
+======================================================================
+ * Serving Flask app 'web_server'
+ * Debug mode: off
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.9.221.52:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m

@@ -636,6 +636,7 @@ class RlogDispatcher:
         self.port: Optional[int] = None
         self.process: Optional[subprocess.Popen] = None
         self._loaded_days: set = set()
+        self._last_activity: float = time.time()
         self._initialized = True
         
     @classmethod
@@ -729,13 +730,43 @@ class RlogDispatcher:
         return self.create_logger_structure()
     
     def launch(self, timeout: int = 30) -> int:
-        """Lance le dispatch en mode slave"""
-        if self.process is not None:
-            return self.port
+        """Lance le dispatch en mode slave avec gestion du timeout (2h)"""
         
+        INACTIVITY_TIMEOUT = 2 * 60 * 60  # 2 hours in seconds
+        
+        if self.process is not None:
+            if self.process.poll() is not None:
+                self.process = None
+                self.port = None
+            else:
+                if time.time() - self._last_activity > INACTIVITY_TIMEOUT:
+                    print(f"🛑 Dispatch inactif depuis plus de 2h, arrêt...", file=sys.stderr)
+                    self.stop()
+                else:
+                    return self.port
+        
+        # Try to find an existing dispatch or start a new one
+        import socket
+        
+        for port in range(self.BASE_PORT, self.BASE_PORT + self.PORT_RANGE):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2)
+                result = sock.connect_ex(('127.0.0.1', port))
+                sock.close()
+                
+                if result == 0:
+                    self.port = port
+                    self.process = None  # External dispatch, no subprocess to manage
+                    self._last_activity = time.time()
+                    print(f"✅ Utilise dispatch existant sur port {port}", file=sys.stderr)
+                    return port
+            except:
+                pass
+        
+        # No existing dispatch found, start a new one
         self.port = self.find_available_port()
         
-        # Create Logger structure and get logs path
         logs_path = self.create_logger_structure()
         
         if not logs_path:
@@ -746,7 +777,6 @@ class RlogDispatcher:
         env = os.environ.copy()
         env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
         
-        # Find interface file
         interface_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_interface.xml")
         if not os.path.exists(interface_path):
             interface_path = os.path.join(self.logs_dir, "debug_interface.xml")
@@ -773,46 +803,11 @@ class RlogDispatcher:
             stderr = self.process.stderr.read().decode() if self.process.stderr else ""
             raise RuntimeError(f"Dispatch arrêté: {stderr}")
         
+        self._last_activity = time.time()
         RlogDispatcher._instance = self
         print(f"✅ Dispatch prêt sur 127.0.0.1:{self.port}", file=sys.stderr)
         return self.port
         
-        print(f"🚀 Dispatch sur port {self.port}...", file=sys.stderr)
-        
-        env = os.environ.copy()
-        env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
-        
-        # Find interface file
-        interface_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_interface.xml")
-        if not os.path.exists(interface_path):
-            interface_path = os.path.join(self.logs_dir, "debug_interface.xml")
-        
-        cmd = [
-            self.DISPATCH_BIN,
-            "-slave", str(self.port),
-            "-logs", logs_path,
-            "-interface", interface_path,
-            "-stderr"
-        ]
-        
-        self.process = subprocess.Popen(
-            cmd,
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            preexec_fn=os.setsid
-        )
-        
-        time.sleep(timeout)
-        
-        if self.process.poll() is not None:
-            stderr = self.process.stderr.read().decode() if self.process.stderr else ""
-            raise RuntimeError(f"Dispatch arrêté: {stderr}")
-        
-        RlogDispatcher._instance = self
-        print(f"✅ Dispatch prêt sur 127.0.0.1:{self.port}", file=sys.stderr)
-        return self.port
-    
     def _calculate_days(self) -> List[str]:
         """Calcule les jours disponibles dans les logs"""
         days = set()
@@ -831,6 +826,9 @@ class RlogDispatcher:
         """Exécute une requête sur le dispatch"""
         if not self.port or not self.process:
             self.launch()
+        
+        # Update activity timestamp
+        self._last_activity = time.time()
         
         # Lazy load le jour demandé
         day = kwargs.get("date", "").replace("-", "_")

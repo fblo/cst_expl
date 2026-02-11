@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CCCP Explorer - Modern Dashboard</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             background: var(--bg-primary);
@@ -19,7 +21,7 @@
             min-height: 100vh;
             transition: background-color 0.3s ease, color 0.3s ease;
         }
-        
+
         .header {
             background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
             border-bottom: 1px solid var(--border-color);
@@ -32,7 +34,7 @@
             z-index: 100;
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
-        
+
         .header h1 {
             font-size: 20px;
             font-weight: 600;
@@ -42,12 +44,12 @@
             gap: 12px;
             transition: color 0.3s ease;
         }
-        
+
         .header h1::before {
             content: '🔗';
             font-size: 24px;
         }
-        
+
         .stats-bar {
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
@@ -56,27 +58,27 @@
             gap: 32px;
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
-        
+
         .stat-item {
             display: flex;
             flex-direction: column;
             gap: 2px;
         }
-        
+
         .stat-value {
             font-size: 24px;
             font-weight: 600;
             color: var(--accent-color);
             transition: color 0.3s ease;
         }
-        
+
         .stat-label {
             font-size: 12px;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
+
         .tabs {
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
@@ -84,7 +86,7 @@
             padding: 0 24px;
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
-        
+
         .tab {
             padding: 12px 20px;
             font-size: 14px;
@@ -93,31 +95,31 @@
             color: var(--text-secondary);
             transition: all 0.2s;
         }
-        
+
         .tab:hover {
             color: var(--text-primary);
             background: var(--bg-tertiary);
         }
-        
+
         .tab.active {
             color: var(--accent-color);
             border-bottom-color: var(--accent-color);
         }
-        
+
         .content {
             padding: 24px;
             max-width: 1600px;
             margin: 0 auto;
         }
-        
+
         .tab-content {
             display: none;
         }
-        
+
         .tab-content.active {
             display: block;
         }
-        
+
         .card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -126,7 +128,7 @@
             overflow: hidden;
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
-        
+
         .card-header {
             background: var(--bg-tertiary);
             padding: 12px 16px;
@@ -136,22 +138,22 @@
             align-items: center;
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
-        
+
         .card-title {
             font-size: 14px;
             font-weight: 600;
             color: var(--text-primary);
         }
-        
+
         /* .card-body {
             padding: 16px;
         } */
-        
+
         .events-list {
             max-height: 600px;
             overflow-y: auto;
         }
-        
+
         .event-item {
             display: flex;
             gap: 16px;
@@ -159,18 +161,18 @@
             border-bottom: 1px solid var(--border-color);
             transition: background-color 0.2s;
         }
-        
+
         .event-item:hover {
             background: var(--bg-tertiary);
         }
-        
+
         .event-time {
             font-size: 12px;
             color: var(--text-muted);
             white-space: nowrap;
             min-width: 140px;
         }
-        
+
         .event-category {
             padding: 2px 8px;
             border-radius: 4px;
@@ -179,44 +181,44 @@
             text-transform: uppercase;
             white-space: nowrap;
         }
-        
+
         .event-category.user_state {
             background: var(--success-bg);
             color: var(--success-color);
         }
-        
+
         .event-category.connection {
             background: #e0f2ff;
             color: #0550ae;
         }
-        
+
         .event-category.session {
             background: var(--purple-bg);
             color: var(--purple-color);
         }
-        
+
         .event-category.ccxml {
             background: var(--warning-bg);
             color: var(--warning-color);
         }
-        
+
         .event-category.explorer {
             background: var(--error-bg);
             color: var(--error-color);
         }
-        
+
         .event-category.unknown {
             background: var(--bg-tertiary);
             color: var(--text-muted);
         }
-        
+
         .event-name {
             font-family: 'SF Mono', 'Consolas', monospace;
             font-size: 12px;
             color: var(--text-primary);
             flex: 1;
         }
-        
+
         .event-source {
             font-size: 11px;
             color: var(--text-muted);
@@ -225,19 +227,19 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        
+
         .table {
             width: 100%;
             border-collapse: collapse;
         }
-        
+
         .table th,
         .table td {
             padding: 10px 12px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
         }
-        
+
         .table th {
             background: var(--bg-tertiary);
             font-size: 11px;
@@ -247,12 +249,12 @@
             letter-spacing: 0.5px;
             transition: background-color 0.3s ease;
         }
-        
+
         .table tr:hover td {
             background: var(--bg-tertiary);
             transition: background-color 0.2s;
         }
-        
+
         .user-badge {
             display: inline-flex;
             align-items: center;
@@ -261,46 +263,46 @@
             border-radius: 6px;
             font-size: 12px;
         }
-        
+
         .user-badge.supervisor {
             background: linear-gradient(135deg, #667eea22, #764ba222);
             color: #a8a4ff;
             border: 1px solid #667eea44;
         }
-        
+
         .user-badge.agent {
             background: linear-gradient(135deg, #11998e22, #38ef7d22);
             color: #69f0ae;
             border: 1px solid #11998e44;
         }
-        
+
         .state-badge {
             padding: 3px 8px;
             border-radius: 4px;
             font-size: 11px;
             font-weight: 500;
         }
-        
+
         .state-badge.plugged {
             background: var(--success-bg);
             color: var(--success-color);
         }
-        
+
         .state-badge.unplugged {
             background: var(--error-bg);
             color: var(--error-color);
         }
-        
+
         .state-badge.ringing {
             background: var(--warning-bg);
             color: var(--warning-color);
         }
-        
+
         .state-badge.pause {
             background: var(--error-bg);
             color: var(--error-color);
         }
-        
+
         .mode-badge {
             display: inline-flex;
             align-items: center;
@@ -309,27 +311,27 @@
             border-radius: 4px;
             font-size: 11px;
         }
-        
+
         .mode-badge.supervisor {
             background: #667eea44;
             color: var(--text-primary);
         }
-        
+
         .mode-badge.agent {
             background: #11998e44;
             color: var(--text-primary);
         }
-        
+
         .mode-badge.unplug {
             background: var(--bg-tertiary);
             color: var(--text-muted);
         }
-        
+
         .mode-badge.interface {
             background: var(--warning-bg);
             color: var(--warning-color);
         }
-        
+
         .queue-badge {
             display: inline-flex;
             align-items: center;
@@ -340,7 +342,7 @@
             background: var(--success-bg);
             color: var(--success-color);
         }
-        
+
         .state-badge {
             display: inline-flex;
             align-items: center;
@@ -350,22 +352,22 @@
             font-size: 11px;
             font-weight: 500;
         }
-        
+
         .state-badge.state-supervision {
             background: var(--success-bg);
             color: var(--success-color);
         }
-        
+
         .state-badge.state-call {
             background: #e0f2ff;
             color: #0550ae;
         }
-        
+
         .state-badge.state-unknown {
             background: var(--bg-tertiary);
             color: var(--text-muted);
         }
-        
+
         .queue-stat {
             display: inline-block;
             padding: 2px 8px;
@@ -373,22 +375,22 @@
             font-size: 12px;
             margin-right: 4px;
         }
-        
+
         .queue-stat.logged {
             background: var(--success-bg);
             color: var(--success-color);
         }
-        
+
         .queue-stat.working {
             background: #e0f2ff;
             color: #0550ae;
         }
-        
+
         .queue-stat.waiting {
             background: var(--warning-bg);
             color: var(--warning-color);
         }
-        
+
         .btn {
             padding: 8px 16px;
             border-radius: 6px;
@@ -398,37 +400,37 @@
             border: none;
             transition: all 0.2s;
         }
-        
+
         .btn-primary {
             background: var(--accent-color);
             color: white;
         }
-        
+
         .btn-primary:hover {
             background: var(--accent-hover);
         }
-        
+
         .btn-secondary {
             background: var(--bg-tertiary);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
         }
-        
+
         .btn-secondary:hover {
             background: var(--border-color);
         }
-        
+
         .form-group {
             margin-bottom: 16px;
         }
-        
+
         .form-group label {
             display: block;
             font-size: 12px;
             color: var(--text-secondary);
             margin-bottom: 6px;
         }
-        
+
         .form-group input,
         .form-group select {
             width: 100%;
@@ -439,19 +441,19 @@
             color: var(--text-primary);
             font-size: 13px;
         }
-        
+
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
             border-color: var(--accent-color);
         }
-        
+
         .grid-2 {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 20px;
         }
-        
+
         .protocol-info {
             font-family: 'SF Mono', 'Consolas', monospace;
             font-size: 11px;
@@ -460,19 +462,19 @@
             border-radius: 6px;
             overflow-x: auto;
         }
-        
+
         .protocol-info table {
             width: 100%;
         }
-        
+
         .protocol-info td {
             padding: 4px 8px;
         }
-        
+
         .protocol-info td:first-child {
             color: var(--accent-color);
         }
-        
+
         .footer {
             text-align: center;
             padding: 20px;
@@ -481,13 +483,13 @@
             border-top: 1px solid var(--border-color);
             margin-top: 40px;
         }
-        
+
         .empty-state {
             text-align: center;
             padding: 60px 20px;
             color: var(--text-muted);
         }
-        
+
         .empty-state-icon {
             font-size: 48px;
             margin-bottom: 16px;
@@ -621,8 +623,9 @@
         }
     </style>
 </head>
+
 <body data-theme="dark">
-        <div class="header">
+    <div class="header">
         <div style="display: flex; align-items: center; gap: 20px;">
             <h1 id="main-title">CCCP Explorer</h1>
             <div class="theme-selector">
@@ -635,8 +638,8 @@
         </div>
         <div style="font-size: 12px; color: var(--text-muted);" id="current-server">Select a project</div>
     </div>
-    
-        <div class="stats-bar">
+
+    <div class="stats-bar">
         <div class="stat-item" style="flex: 1;">
             <span class="stat-value" id="stat-project" style="font-size: 18px; color: var(--accent-color);">-</span>
             <span class="stat-label">Project</span>
@@ -658,15 +661,15 @@
             <span class="stat-label">Last Update</span>
         </div>
     </div>
-    
+
     <div class="tabs">
         <div class="tab active" data-tab="users">Users</div>
         <div class="tab" data-tab="queues">Queues</div>
         <div class="tab" data-tab="history">Calls</div>
-        <div class="tab" data-tab="rlog">Rlog</div>
+        <div class="tab" data-tab="logs">📁 Logs Explorer</div>
         <div class="tab" data-tab="connect">Projects</div>
     </div>
-    
+
     <div class="content">
         <!-- Users Tab -->
         <div id="users-tab" class="tab-content active">
@@ -674,7 +677,9 @@
                 <div class="card-header">
                     <span class="card-title">CCCP Users</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="user-search" placeholder="Search..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterUsers()">
+                        <input type="text" id="user-search" placeholder="Search..."
+                            style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;"
+                            onkeyup="filterUsers()">
                         <button class="btn btn-secondary" onclick="loadUsers()">Refresh</button>
                     </div>
                 </div>
@@ -702,14 +707,16 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Queues Tab -->
         <div id="queues-tab" class="tab-content">
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Queues</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="queue-search" placeholder="Search..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterQueues()">
+                        <input type="text" id="queue-search" placeholder="Search..."
+                            style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;"
+                            onkeyup="filterQueues()">
                         <button class="btn btn-secondary" onclick="loadQueues()">Refresh</button>
                     </div>
                 </div>
@@ -734,14 +741,16 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- History Tab -->
         <div id="history-tab" class="tab-content">
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Call History</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="history-search" placeholder="Search..." style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;" onkeyup="filterHistory()">
+                        <input type="text" id="history-search" placeholder="Search..."
+                            style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;"
+                            onkeyup="filterHistory()">
                         <button class="btn btn-secondary" onclick="loadHistory()">Refresh</button>
                     </div>
                 </div>
@@ -767,28 +776,59 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Rlog Tab -->
-        <div id="rlog-tab" class="tab-content">
+
+        <!-- Logs Explorer Tab -->
+        <div id="logs-tab" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">CCXML Sessions</span>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="date" id="rlog-date" value="2026-02-08" style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px;">
-                        <button class="btn btn-primary" onclick="loadSessions()">Load</button>
-                    </div>
+                    <span class="card-title">📁 Logs Explorer</span>
                 </div>
-                <div class="card-body">
-                    <div style="margin-bottom: 16px; font-size: 12px; color: var(--text-muted);">
-                        <span id="rlog-info">-</span>
+                <div class="card-body" style="padding: 16px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Project</label>
+                            <select id="logs-project" 
+                                style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px;">
+                                <option value="">Select project...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Date</label>
+                            <input type="date" id="logs-date" 
+                                style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px;">
+                        </div>
+                        <button class="btn btn-primary" onclick="retrieveLogs()" id="btn-retrieve" style="white-space: nowrap;">
+                            📥 Retrieve & Load
+                        </button>
                     </div>
-                    <div id="rlog-sessions" class="events-list" style="max-height: calc(100vh - 400px); font-family: monospace; font-size: 11px;">
-                        <div class="empty-state">Select a date and click "Load" to view sessions</div>
+
+                    <!-- Progress Display -->
+                    <div id="progress-container" style="margin-top: 16px; display: none;">
+                        <div id="progress-status" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;"></div>
+                        <div style="background: var(--bg-tertiary); border-radius: 4px; height: 6px; overflow: hidden;">
+                            <div id="progress-bar" style="background: var(--accent-color); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Completion Status -->
+                    <div id="completion-status" style="margin-top: 16px; font-size: 12px; display: none;"></div>
+                </div>
+            </div>
+
+            <!-- Sessions List -->
+            <div class="card" style="margin-top: 16px;">
+                <div class="card-header">
+                    <span class="card-title">📞 Call Sessions</span>
+                    <span id="sessions-count" style="font-size: 12px; color: var(--text-muted);">0 sessions</span>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div id="logs-sessions-list" style="max-height: 400px; overflow-y: auto;">
+                        <div class="empty-state" style="padding: 40px;">Select a project and date, then click "Retrieve & Load"</div>
                     </div>
                 </div>
             </div>
         </div>
-        
+
         <!-- Connect Tab -->
         <div id="connect-tab" class="tab-content">
             <div class="card">
@@ -797,17 +837,18 @@
                     <button class="btn btn-secondary" onclick="loadServers()">Refresh</button>
                 </div>
                 <div class="card-body">
-                    <input type="text" id="project-search" class="project-search" placeholder="Search..." onkeyup="filterProjects()">
+                    <input type="text" id="project-search" class="project-search" placeholder="Search..."
+                        onkeyup="filterProjects()">
                     <div class="project-list" id="project-list"></div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <div class="footer">
         CCCP Explorer - Real-time monitoring dashboard
     </div>
-    
+
     <script>
         function changeTheme() {
             const select = document.getElementById('theme-select');
@@ -837,62 +878,62 @@
                     loadUsers();
                 } else if (tab.dataset.tab === 'history') {
                     loadHistory();
-                } else if (tab.dataset.tab === 'rlog') {
-                    loadSessions();
+                } else if (tab.dataset.tab === 'logs') {
+                    loadLogsExplorer();
                 } else if (tab.dataset.tab === 'connect') {
                     loadServers();
                 }
             });
         });
-        
+
         let allUsers = [];
         let allQueues = [];
         let allHistory = [];
-        
+
         // Variables pour stocker l'état du tri
         let userSortColumn = null;
         let userSortDirection = 'asc'; // 'asc' ou 'desc'
         let queueSortColumn = null;
         let queueSortDirection = 'desc'; // 'asc' ou 'desc'
-        
+
         // Fonction pour gérer le démarrage de la saisie dans un champ de recherche
         function onSearchInputStart(inputElement) {
             // Cette fonction ne fait plus rien puisque le rafraîchissement automatique a été supprimé
         }
-        
+
         // Fonction pour gérer la fin de la saisie dans un champ de recherche
         function onSearchInputEnd(inputElement) {
             // Cette fonction ne fait plus rien puisque le rafraîchissement automatique a été supprimé
         }
-        
+
         // Load users
         async function loadUsers() {
             try {
                 const response = await fetch('/api/users');
                 const users = await response.json();
-                
+
                 // Filter out "consistent" user
                 allUsers = users.filter(u => u.login !== 'consistent');
-                
+
                 // Réappliquer le tri utilisateur si nécessaire
                 if (userSortColumn) {
                     allUsers.sort((a, b) => {
                         let valueA = a[userSortColumn] || '';
                         let valueB = b[userSortColumn] || '';
-                        
+
                         // Convertir en chaîne de caractères pour comparaison
                         valueA = String(valueA).toLowerCase();
                         valueB = String(valueB).toLowerCase();
-                        
+
                         let result = valueA.localeCompare(valueB);
-                        
+
                         // Inverser le résultat si la direction est descendante
                         return userSortDirection === 'desc' ? -result : result;
                     });
                 }
-                
+
                 document.getElementById('stat-users').textContent = allUsers.length;
-                
+
                 // Ne mettre à jour le projet que s'il n'y en a pas dans l'URL
                 if (!getProjectFromUrl()) {
                     const projectElements = new Set();
@@ -904,32 +945,32 @@
                     const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
                     document.getElementById('stat-project').textContent = projectDisplay;
                 }
-                
+
                 renderUsers(allUsers);
             } catch (e) {
                 console.error('Error loading users:', e);
             }
         }
-        
+
         function renderUsers(users) {
             const tbody = document.getElementById('users-container');
             if (users.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No users found</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = users.map(user => {
                 const mode = user.mode || '-';
                 let modeClass = 'unplug';
                 if (mode.includes('supervisor')) modeClass = 'supervisor';
                 else if (mode.includes('agent')) modeClass = 'agent';
                 else if (mode.includes('interface')) modeClass = 'interface';
-                
+
                 const state = user.state || '-';
                 let stateClass = 'state-unknown';
                 if (state.toLowerCase().includes('supervision')) stateClass = 'state-supervision';
                 else if (state.toLowerCase().includes('appel')) stateClass = 'state-call';
-                
+
                 return `<tr>
                     <td>${user.user_name || '-'}</td>
                     <td>${user.login || '-'}</td>
@@ -943,7 +984,7 @@
                 </tr>`;
             }).join('');
         }
-        
+
         function sortUsers(column) {
             // Si la même colonne est cliquée à nouveau, inverser la direction
             if (userSortColumn === column) {
@@ -952,92 +993,92 @@
                 userSortColumn = column;
                 userSortDirection = 'asc';
             }
-            
+
             allUsers.sort((a, b) => {
                 let valueA = a[column] || '';
                 let valueB = b[column] || '';
-                
+
                 // Convertir en chaîne de caractères pour comparaison
                 valueA = String(valueA).toLowerCase();
                 valueB = String(valueB).toLowerCase();
-                
+
                 let result = valueA.localeCompare(valueB);
-                
+
                 // Inverser le résultat si la direction est descendante
                 return userSortDirection === 'desc' ? -result : result;
             });
-            
+
             renderUsers(allUsers);
         }
-        
+
         function filterUsers() {
             const search = document.getElementById('user-search').value.toLowerCase();
             const filtered = allUsers.filter(user => {
                 return (user.user_name || '').toLowerCase().includes(search) ||
-                       (user.login || '').toLowerCase().includes(search) ||
-                       (user.project_name || '').toLowerCase().includes(search) ||
-                       (user.profile_name || '').toLowerCase().includes(search) ||
-                       (user.mode || '').toLowerCase().includes(search);
+                    (user.login || '').toLowerCase().includes(search) ||
+                    (user.project_name || '').toLowerCase().includes(search) ||
+                    (user.profile_name || '').toLowerCase().includes(search) ||
+                    (user.mode || '').toLowerCase().includes(search);
             });
             renderUsers(filtered);
         }
-        
+
         // Load queues
         async function loadQueues() {
             try {
                 const response = await fetch('/api/queues');
                 const queues = await response.json();
                 allQueues = queues;
-                
+
                 // Réappliquer le tri des files d'attente si nécessaire
                 if (queueSortColumn) {
                     allQueues.sort((a, b) => {
                         let valueA, valueB;
-                        
+
                         if (queueSortColumn === 'name') {
                             // Pour le tri alphabétique
                             valueA = a[queueSortColumn] || '';
                             valueB = b[queueSortColumn] || '';
-                            
+
                             // Convertir en chaîne de caractères pour comparaison
                             valueA = String(valueA).toLowerCase();
                             valueB = String(valueB).toLowerCase();
-                            
+
                             let result = valueA.localeCompare(valueB);
-                            
+
                             // Inverser le résultat si la direction est descendante
                             return queueSortDirection === 'desc' ? -result : result;
                         } else {
                             // Pour les colonnes numériques (logged, working, waiting)
                             valueA = a[queueSortColumn] || 0;
                             valueB = b[queueSortColumn] || 0;
-                            
+
                             // Convertir en nombres pour comparaison numérique
                             valueA = Number(valueA);
                             valueB = Number(valueB);
-                            
+
                             let result = valueA - valueB;
-                            
+
                             // Inverser le résultat si la direction est descendante
                             return queueSortDirection === 'desc' ? -result : result;
                         }
                     });
                 }
-                
+
                 document.getElementById('stat-queues').textContent = queues.length;
                 renderQueues(allQueues);
             } catch (e) {
                 console.error('Error loading queues:', e);
             }
         }
-        
+
         function renderQueues(queues) {
             const tbody = document.getElementById('queues-container');
             if (queues.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No queues found</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = queues.map(queue => `
                 <tr>
                     <td><span class="queue-badge">${queue.name || '-'}</span></td>
@@ -1049,7 +1090,7 @@
                 </tr>
             `).join('');
         }
-        
+
         function sortQueues(column) {
             // Si la même colonne est cliquée à nouveau, inverser la direction
             if (queueSortColumn === column) {
@@ -1058,47 +1099,47 @@
                 queueSortColumn = column;
                 queueSortDirection = 'desc'; // Par défaut pour les queues
             }
-            
+
             allQueues.sort((a, b) => {
                 let valueA, valueB;
-                
+
                 if (column === 'name') {
                     // Pour le tri alphabétique
                     valueA = a[column] || '';
                     valueB = b[column] || '';
-                    
+
                     // Convertir en chaîne de caractères pour comparaison
                     valueA = String(valueA).toLowerCase();
                     valueB = String(valueB).toLowerCase();
-                    
+
                     let result = valueA.localeCompare(valueB);
-                    
+
                     // Inverser le résultat si la direction est descendante
                     return queueSortDirection === 'desc' ? -result : result;
                 } else {
                     // Pour les colonnes numériques (logged, working, waiting)
                     valueA = a[column] || 0;
                     valueB = b[column] || 0;
-                    
+
                     // Convertir en nombres pour comparaison numérique
                     valueA = Number(valueA);
                     valueB = Number(valueB);
-                    
+
                     let result = valueA - valueB;
-                    
+
                     // Inverser le résultat si la direction est descendante
                     return queueSortDirection === 'desc' ? -result : result;
                 }
             });
-            
+
             renderQueues(allQueues);
         }
-        
+
         function filterQueues() {
             const search = document.getElementById('queue-search').value.toLowerCase();
             const filtered = allQueues.filter(queue => {
                 return (queue.name || '').toLowerCase().includes(search) ||
-                       (queue.display_name || '').toLowerCase().includes(search);
+                    (queue.display_name || '').toLowerCase().includes(search);
             });
             renderQueues(filtered);
         }
@@ -1114,14 +1155,14 @@
                 console.error('Error loading history:', e);
             }
         }
-        
+
         function renderHistory(history) {
             const tbody = document.getElementById('history-container');
             if (history.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls in history</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = history.map(call => `
                 <tr style="cursor: pointer;" onclick="openConsole('${call.session_id || ''}')">
                     <td>${call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
@@ -1134,7 +1175,7 @@
                 </tr>
             `).join('');
         }
-        
+
         // Function to remove phone number prefixes
         function removePhonePrefixes(number) {
             if (!number || number === '-') return number;
@@ -1148,19 +1189,19 @@
             }
             return number;
         }
-        
+
         function filterHistory() {
             const search = document.getElementById('history-search').value.toLowerCase();
             const filtered = allHistory.filter(call => {
                 return (call.session_id || '').toLowerCase().includes(search) ||
-                       (call.queue_name || '').toLowerCase().includes(search) ||
-                       (call.agent || '').toLowerCase().includes(search) ||
-                       (call.caller || '').toLowerCase().includes(search) ||
-                       (call.called || '').toLowerCase().includes(search);
+                    (call.queue_name || '').toLowerCase().includes(search) ||
+                    (call.agent || '').toLowerCase().includes(search) ||
+                    (call.caller || '').toLowerCase().includes(search) ||
+                    (call.called || '').toLowerCase().includes(search);
             });
             renderHistory(filtered);
         }
-        
+
         // Open console for a session
         function openConsole(sessionId) {
             if (sessionId) {
@@ -1174,65 +1215,65 @@
         let rlogData = null;
 
         async function loadSessions() {
-            const date = document.getElementById('rlog-date').value;
+            console.log('[LogsExplorer] loadSessions called');
+            const date = document.getElementById('logs-date').value;
+            if (!date) {
+                console.log('[LogsExplorer] No date selected');
+                document.getElementById('logs-sessions-list').innerHTML = '<div class="empty-state">Select a date first</div>';
+                return;
+            }
+            console.log('[LogsExplorer] Loading sessions for date:', date);
             try {
                 const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
                 const data = await response.json();
+                console.log('[LogsExplorer] Sessions data:', data);
 
                 if (data.success) {
-                    rlogData = data;
                     const sessions = data.sessions || {};
-                    
-                    document.getElementById('rlog-info').textContent = 
-                        `Date: ${data.date} | Files: ${data.total_files} | Sessions: ${data.session_count}`;
-                    
-                    renderSessions(sessions);
+                    console.log('[LogsExplorer] Found', Object.keys(sessions).length, 'sessions');
+                    renderLogsSessions(sessions);
                 } else {
-                    document.getElementById('rlog-sessions').innerHTML = 
+                    document.getElementById('logs-sessions-list').innerHTML =
                         '<div class="empty-state">' + (data.error || 'Error loading sessions') + '</div>';
                 }
             } catch (e) {
-                console.error('Error loading sessions:', e);
-                document.getElementById('rlog-sessions').innerHTML = '<div class="empty-state">Error loading sessions</div>';
+                console.error('[LogsExplorer] Error loading sessions:', e);
+                document.getElementById('logs-sessions-list').innerHTML = '<div class="empty-state">Error loading sessions</div>';
             }
         }
 
-        function renderSessions(sessions) {
-            const container = document.getElementById('rlog-sessions');
+        function renderLogsSessions(sessions) {
+            const container = document.getElementById('logs-sessions-list');
             const sessionList = Object.values(sessions);
-            const currentDate = document.getElementById('rlog-date').value;
+            const currentDate = document.getElementById('logs-date').value;
+
+            document.getElementById('sessions-count').textContent = sessionList.length + ' sessions';
 
             if (sessionList.length === 0) {
                 container.innerHTML = '<div class="empty-state">No sessions found for this date</div>';
                 return;
             }
 
-            container.innerHTML = sessionList.map(session => {
-                const shortId = session.id ? session.id.split('@')[0] + '@...' : '-';
-                const type = session.type || '-';
-                const caller = session.caller || '-';
-                const called = session.called || '-';
+            container.innerHTML = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px;">' +
+                sessionList.map(session => {
+                    const shortId = session.id ? session.id.split('@')[0] + '@...' : '-';
+                    const type = session.type || 'call';
+                    const caller = session.caller || '-';
+                    const called = session.called || '-';
+                    const createDate = session.create_date || '-';
 
-                return `<div style="padding: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 4px; cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${currentDate}')" title="Click to view session details">
-                    <div style="color: var(--purple-color); font-weight: 600; font-size: 12px; margin-bottom: 6px;">
-                        ${escapeHtml(session.id)}
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 11px;">
-                        <div>
-                            <span style="color: var(--text-secondary);">Type:</span><br>
-                            <span style="color: var(--accent-color);">${escapeHtml(type)}</span>
+                    return `<div style="padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${currentDate}')" title="Click to view session details">
+                        <div style="color: var(--purple-color); font-weight: 600; font-size: 11px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${escapeHtml(session.id)}
                         </div>
-                        <div>
-                            <span style="color: var(--text-secondary);">Caller:</span><br>
-                            <span style="color: var(--success-color);">${escapeHtml(caller)}</span>
+                        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">${escapeHtml(createDate)}</div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 10px;">
+                            <div><span style="color: var(--text-secondary);">Type:</span> <span style="color: var(--accent-color);">${escapeHtml(type)}</span></div>
+                            <div><span style="color: var(--text-secondary);">Caller:</span> <span style="color: var(--success-color);">${escapeHtml(caller)}</span></div>
+                            <div><span style="color: var(--text-secondary);">Called:</span> <span style="color: var(--warning-color);">${escapeHtml(called)}</span></div>
                         </div>
-                        <div>
-                            <span style="color: var(--text-secondary);">Called:</span><br>
-                            <span style="color: var(--warning-color);">${escapeHtml(called)}</span>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
+                    </div>`;
+                }).join('') + '</div>';
         }
 
         function openRlogConsole(sessionId, date) {
@@ -1285,7 +1326,7 @@
 
         function filterProjects() {
             const search = document.getElementById('project-search').value.toLowerCase();
-            const filtered = allServers.filter(server => 
+            const filtered = allServers.filter(server =>
                 server.project.toLowerCase().includes(search)
             );
             renderServers(filtered);
@@ -1301,23 +1342,23 @@
             try {
                 const response = await fetch('/api/select_server', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({host: host, port: port, project: project})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ host: host, port: port, project: project })
                 });
 
                 const data = await response.json();
                 if (data.success) {
                     document.getElementById('current-server').textContent = `${data.project} - ${host}:${port}`;
-                    
+
                     allUsers = data.users || [];
                     allQueues = data.queues || [];
                     allHistory = data.history || [];
-                    
+
                     document.getElementById('stat-users').textContent = allUsers.length;
                     document.getElementById('stat-queues').textContent = allQueues.length;
                     document.getElementById('stat-history').textContent = allHistory.length;
                     document.getElementById('stat-last-update').textContent = data.last_update ? new Date(data.last_update).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--';
-                    
+
                     // Ne mettre à jour le projet que s'il n'y en a pas dans l'URL
                     if (!getProjectFromUrl()) {
                         const projectElements = new Set();
@@ -1332,13 +1373,13 @@
                     } else {
                         updateMainTitle(getProjectFromUrl()); // Utiliser le projet de l'URL
                     }
-                    
+
                     renderUsers(allUsers);
                     renderQueues(allQueues);
                     renderHistory(allHistory);
-                    
+
                     history.replaceState(null, '', `/cst_explorer/${encodeURIComponent(project)}`);
-                    
+
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                     document.querySelector('.tab[data-tab="users"]').classList.add('active');
@@ -1380,7 +1421,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             initTheme();
             const projectFromUrl = getProjectFromUrl();
-            
+
             if (projectFromUrl) {
                 document.getElementById('current-server').textContent = 'Loading...';
                 loadServers().then(() => {
@@ -1412,9 +1453,9 @@
                 document.querySelector('.tab[data-tab="connect"]').classList.add('active');
                 document.getElementById('connect-tab').classList.add('active');
             }
-            
+
             // Gestion de la touche F5 pour rafraîchir toutes les vues
-            document.addEventListener('keydown', function(event) {
+            document.addEventListener('keydown', function (event) {
                 if (event.key === 'F5') {
                     event.preventDefault(); // Empêche le rechargement de page par défaut
                     refreshAllViews();
@@ -1426,10 +1467,10 @@
         async function refreshAllViews() {
             const activeTab = document.querySelector('.tab.active');
             const activeTabId = activeTab ? activeTab.dataset.tab : null;
-            
+
             // Sauvegarder le projet courant de l'URL avant le rafraîchissement
             const projectFromUrl = getProjectFromUrl();
-            
+
             // Rafraîchir toutes les données
             if (typeof loadUsers === 'function') {
                 await loadUsers();
@@ -1443,12 +1484,12 @@
             if (typeof loadStatus === 'function') {
                 await loadStatus();
             }
-            
+
             // Restaurer le projet de l'URL après le rafraîchissement
             if (projectFromUrl) {
                 document.getElementById('stat-project').textContent = projectFromUrl;
             }
-            
+
             // Restaurer l'onglet actif après le chargement
             if (activeTabId) {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1468,13 +1509,219 @@
                 const status = await response.json();
                 if (status.last_update) {
                     const date = new Date(status.last_update);
-                    document.getElementById('stat-last-update').textContent = 
+                    document.getElementById('stat-last-update').textContent =
                         date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 }
             } catch (e) {
                 console.error('Error loading status:', e);
             }
         }
+        // =============================================================================
+        // LOGS EXPLORER
+        // =============================================================================
+
+        let logsProjects = [];
+        let selectedLogsProject = '';
+        let selectedLogsDate = '';
+        let retrieveJobId = null;
+
+        // Initialize logs explorer when tab is clicked
+        async function loadLogsExplorer() {
+            const projectSelect = document.getElementById('logs-project');
+            
+            // Only load projects once
+            if (logsProjects.length === 0) {
+                projectSelect.innerHTML = '<option value="">Loading...</option>';
+                projectSelect.disabled = true;
+                
+                try {
+                    const response = await fetch('/api/logs/projects');
+                    const data = await response.json();
+                    
+                    projectSelect.innerHTML = '<option value="">Select project...</option>';
+                    projectSelect.disabled = false;
+                    
+                    if (data.success) {
+                        logsProjects = data.projects || [];
+                        
+                        // Show NFS status
+                        const nfsStatus = document.getElementById('nfs-status');
+                        if (nfsStatus) {
+                            nfsStatus.textContent = data.nfs_available 
+                                ? `✅ NFS available (${logsProjects.length} projects)` 
+                                : '⚠️ NFS unavailable';
+                        }
+                        
+                        logsProjects.forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p;
+                            opt.textContent = p;
+                            projectSelect.appendChild(opt);
+                        });
+                    }
+                } catch (e) {
+                    projectSelect.innerHTML = '<option value="">Error loading</option>';
+                    console.error('Error loading projects:', e);
+                }
+            }
+        }
+
+        async function retrieveLogs() {
+            const project = document.getElementById('logs-project').value;
+            const date = document.getElementById('logs-date').value;
+            
+            if (!project || !date) {
+                alert('Please select a project and date');
+                return;
+            }
+            
+            const btn = document.getElementById('btn-retrieve');
+            const progressContainer = document.getElementById('progress-container');
+            const progressStatus = document.getElementById('progress-status');
+            const progressBar = document.getElementById('progress-bar');
+            const completionStatus = document.getElementById('completion-status');
+            
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Running...';
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '10%';
+            progressStatus.textContent = `Récupération des logs pour ${project} le ${date}...`;
+            completionStatus.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/logs/retrieve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project, date })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    retrieveJobId = data.job_id;
+                    progressBar.style.width = '30%';
+                    pollRetrieveProgress(data.job_id);
+                } else {
+                    progressStatus.textContent = '❌ Erreur: ' + (data.error || 'Erreur inconnue');
+                    progressStatus.style.color = 'var(--error-color)';
+                    progressBar.style.background = 'var(--error-color)';
+                    btn.disabled = false;
+                    btn.innerHTML = '📥 Retrieve & Load';
+                }
+            } catch (e) {
+                progressStatus.textContent = '❌ Erreur: ' + e.message;
+                progressStatus.style.color = 'var(--error-color)';
+                btn.disabled = false;
+                btn.innerHTML = '📥 Retry';
+            }
+        }
+
+        async function pollRetrieveProgress(jobId) {
+            const progressStatus = document.getElementById('progress-status');
+            const progressBar = document.getElementById('progress-bar');
+            const completionStatus = document.getElementById('completion-status');
+            const btn = document.getElementById('btn-retrieve');
+            
+            try {
+                const response = await fetch(`/api/logs/retrieve/status/${jobId}`);
+                const data = await response.json();
+                
+                progressStatus.textContent = data.progress || data.status;
+                
+                if (data.status === 'running') {
+                    progressBar.style.width = '60%';
+                    setTimeout(() => pollRetrieveProgress(jobId), 1000);
+                } else if (data.status === 'done' || data.status === 'done_with_errors') {
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = 'var(--success-color)';
+                    
+                    const copied = data.copied || 0;
+                    const decompressed = data.decompressed || 0;
+                    const dispatchPort = data.dispatch_port || null;
+                    
+                    let msg = `✅ Terminé: ${copied} fichiers copiés, ${decompressed} décompressés`;
+                    if (dispatchPort) {
+                        msg += ` | Dispatch sur port ${dispatchPort}`;
+                    }
+                    if (data.dispatch_error) {
+                        msg += ` | ⚠️ Dispatch: ${data.dispatch_error}`;
+                    }
+                    
+                    completionStatus.innerHTML = msg;
+                    completionStatus.style.display = 'block';
+                    completionStatus.style.color = 'var(--success-color)';
+                    
+                    btn.disabled = false;
+                    btn.innerHTML = '📥 Retrieve & Load';
+                    
+                    // Automatically load sessions
+                    loadSessions();
+                } else if (data.status === 'error') {
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = 'var(--error-color)';
+                    progressStatus.style.color = 'var(--error-color)';
+                    completionStatus.textContent = '❌ Erreur: ' + (data.error || 'Erreur inconnue');
+                    completionStatus.style.display = 'block';
+                    completionStatus.style.color = 'var(--error-color)';
+                    btn.disabled = false;
+                    btn.innerHTML = '📥 Retry';
+                }
+            } catch (e) {
+                console.error('Poll error:', e);
+                setTimeout(() => pollRetrieveProgress(jobId), 2000);
+            }
+        }
+
+        async function loadSessions() {
+            const date = document.getElementById('logs-date').value;
+            const container = document.getElementById('logs-sessions-list');
+            const countEl = document.getElementById('sessions-count');
+            
+            if (!date) {
+                container.innerHTML = '<div class="empty-state">Select a date first</div>';
+                return;
+            }
+            
+            container.innerHTML = '<div class="empty-state">⏳ Chargement des sessions...</div>';
+            
+            try {
+                const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
+                const data = await response.json();
+                
+                if (data.success) {
+                    const sessions = data.sessions || {};
+                    const sessionList = Object.values(sessions);
+                    
+                    countEl.textContent = sessionList.length + ' sessions';
+                    
+                    if (sessionList.length === 0) {
+                        container.innerHTML = '<div class="empty-state">Aucune session trouvée pour cette date</div>';
+                        return;
+                    }
+                    
+                    container.innerHTML = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px;">' +
+                        sessionList.map(session => {
+                            const createDate = session.create_date || '-';
+                            return `<div style="padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')" title="Click to view session details">
+                                <div style="color: var(--purple-color); font-weight: 600; font-size: 11px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${escapeHtml(session.id)}
+                                </div>
+                                <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">${escapeHtml(createDate)}</div>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 10px;">
+                                    <div><span style="color: var(--text-secondary);">Type:</span> <span style="color: var(--accent-color);">${escapeHtml(session.type || 'call')}</span></div>
+                                    <div><span style="color: var(--text-secondary);">Caller:</span> <span style="color: var(--success-color);">${escapeHtml(session.caller || '-')}</span></div>
+                                    <div><span style="color: var(--text-secondary);">Called:</span> <span style="color: var(--warning-color);">${escapeHtml(session.called || '-')}</span></div>
+                                </div>
+                            </div>`;
+                        }).join('') + '</div>';
+                } else {
+                    container.innerHTML = '<div class="empty-state">❌ Erreur: ' + (data.error || 'Erreur inconnue') + '</div>';
+                }
+            } catch (e) {
+                console.error('Error loading sessions:', e);
+                container.innerHTML = '<div class="empty-state">❌ Erreur: ' + e.message + '</div>';
+            }
+        }
     </script>
 </body>
+
 </html>
