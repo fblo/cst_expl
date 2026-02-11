@@ -758,9 +758,30 @@ def api_dispatches_list():
 
 @app.route("/api/dispatches/cleanup", methods=["POST"])
 def api_dispatches_cleanup():
-    """Manually trigger cleanup of stale dispatches"""
-    cleanup_stale_dispatches()
-    return jsonify({"success": True, "message": "Cleanup triggered"})
+    """Manually trigger cleanup of stale dispatches (>24h)"""
+    count = _cleanup_stale_dispatches(86400)
+    return jsonify({"success": True, "message": f"Cleaned up {count} stale dispatches"})
+
+
+@app.route("/api/logs/cleanup", methods=["POST"])
+def api_logs_cleanup():
+    """Manually trigger cleanup of old log directories (>2 days)"""
+    result = _cleanup_old_directories(2)
+    return jsonify({
+        "success": True,
+        "message": f"Cleaned up {result['cleaned']} old directories",
+        "cleaned": result["cleaned"]
+    })
+
+
+@app.route("/api/logs/migrate", methods=["POST"])
+def api_logs_migrate():
+    """Remove old Logger/ structure (migration to date-based directories)"""
+    removed = _cleanup_old_logger_structure()
+    return jsonify({
+        "success": True,
+        "message": f"Old Logger/ structure removed: {removed}"
+    })
 
 
 @app.route("/api/rlog/cleanup", methods=["POST"])
@@ -1465,16 +1486,19 @@ def _get_nfs_log_path(hostname, project):
 
 
 def _get_project_hostname_from_mysql(project_name):
-    """Resolve project name to vocal hostname using MySQL"""
+    """Resolve project name to vocal hostname using MySQL.
+    Returns a dict with ps_hostname (for NFS paths) and svc_hostname (from master_vocalnodes).
+    """
     query = """
-        SELECT 
+        SELECT
             v.cccip,
-            g.cst_node
-        FROM 
+            g.cst_node,
+            v.hostname AS svc_hostname
+        FROM
             interactivportal.Global_referential g
-        JOIN 
+        JOIN
             interactivportal.Projects p ON g.customer_id = p.id
-        JOIN 
+        JOIN
             interactivdbmaster.master_vocalnodes v ON g.cst_node = v.vocalnode
         WHERE p.name = %s
     """
@@ -1485,27 +1509,36 @@ def _get_project_hostname_from_mysql(project_name):
         result = cursor.fetchone()
         cursor.close()
         conn.close()
-        
+
         if result:
-            # Get hostname directly from DB (cst_node) as requested
-            hostname = result["cst_node"]
-            
-            # Apply hostname corrections if needed (legacy map)
-            corrections = {
-                "ps-hub-prd-cst-fr-501": "vs-hub-prd-cst-fr-501",
-                "ps-ics-prd-cst-de-501": "vs-ics-prd-cst-de-501",
-                "ps-abs-prd-cst-fr-501": "vs-abs-prd-cst-fr-501",
-                "ps-ics-prd-cst-be-501": "vs-ics-prd-cst-be-501",
-                "ps-ics-prd-cst-at-501": "vs-ics-prd-cst-at-501",
-                "ps-ics-prd-cst-nl-501": "vs-ics-prd-cst-nl-501",
-                "ps-ics-prd-cst-ie-501": "vs-ics-prd-cst-ie-501",
-                "ps-hub-prd-cst-fr-502": "vs-hub-prd-cst-fr-502",
+            cst_node = result.get("cst_node")
+            svc_hostname = result.get("svc_hostname")
+
+            # Le cst_node peut être un shortcut (ex: "fr529") ou un hostname complet (ex: "ps-ics-prd-cst-fr-530")
+            # Le svc_hostname contient toujours le hostname complet avec svc- (ex: "svc-ics-prd-cst-fr-529")
+            # Pour le NFS, on a besoin du hostname avec ps- (ex: "ps-ics-prd-cst-fr-529")
+
+            if svc_hostname:
+                # Transformer svc- en ps- pour le chemin NFS
+                ps_hostname = svc_hostname.replace("svc-", "ps-", 1)
+            elif cst_node:
+                # Fallback: utiliser cst_node directement
+                ps_hostname = cst_node
+                svc_hostname = None
+            else:
+                return None
+
+            logger.info(f"MySQL for {project_name}: cst_node={cst_node}, svc_hostname={svc_hostname}, ps_hostname={ps_hostname}")
+
+            return {
+                "cst_node": cst_node,
+                "svc_hostname": svc_hostname,
+                "ps_hostname": ps_hostname,
             }
-            return corrections.get(hostname, hostname)
-            
+
     except Exception as e:
-        logger.error(f"MySQL error resolving hostname: {e}")
-    
+        logger.error(f"MySQL error resolving hostname for {project_name}: {e}")
+
     return None
 
 
@@ -1535,21 +1568,38 @@ def api_logs_projects():
 
 
 def _get_hostnames_for_project(project):
-    """Find hostnames for a project - checks both NFS and local logs"""
+    """Find hostnames for a project - checks both NFS and local logs.
+    Returns list of hostnames suitable for NFS path.
+    """
     # First check local logs
     local_hostnames = _get_local_hostnames_for_project(project)
     if local_hostnames:
+        logger.info(f"Local hostnames found for {project}: {local_hostnames}")
         return local_hostnames
-    
+
     # Then check NFS via MySQL
-    hostname = _get_project_hostname_from_mysql(project)
-    
-    if hostname:
-        # Verify if path exists on NFS
-        path = _get_nfs_log_path(hostname, project)
-        if path and os.path.exists(path):
-            return [hostname]
-            
+    mysql_result = _get_project_hostname_from_mysql(project)
+
+    if mysql_result:
+        ps_hostname = mysql_result.get("ps_hostname")
+        svc_hostname = mysql_result.get("svc_hostname")
+
+        if ps_hostname:
+            # Verify if path exists on NFS
+            path = _get_nfs_log_path(ps_hostname, project)
+            logger.info(f"MySQL for {project}: ps_hostname={ps_hostname}, svc_hostname={svc_hostname}")
+            logger.info(f"NFS path check: {path} (exists: {os.path.exists(path) if path else False})")
+
+            if path and os.path.exists(path):
+                return [ps_hostname]
+            else:
+                # Try with svc_hostname if ps_hostname doesn't work
+                if svc_hostname and svc_hostname != ps_hostname:
+                    path2 = _get_nfs_log_path(svc_hostname, project)
+                    if path2 and os.path.exists(path2):
+                        logger.info(f"Using svc_hostname {svc_hostname} instead of ps_hostname {ps_hostname}")
+                        return [svc_hostname]
+
     return []
 
 
@@ -1578,66 +1628,178 @@ def _get_local_log_path(hostname, project):
     return os.path.join(logs_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
 
 
+def _cleanup_old_directories(max_age_days: int = 2):
+    """Clean up directories older than max_age_days in import_logs"""
+    import time as time_mod
+    import shutil
+
+    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
+
+    if not os.path.exists(logs_dir):
+        return {"cleaned": 0, "errors": 0}
+
+    cutoff_time = time_mod.time() - (max_age_days * 24 * 60 * 60)
+    cleaned_count = 0
+    error_count = 0
+
+    for item in os.listdir(logs_dir):
+        item_path = os.path.join(logs_dir, item)
+
+        if not os.path.isdir(item_path):
+            continue
+
+        # Check if it's a date-based directory (contains _YYYY-MM-DD pattern)
+        if "_20" not in item:
+            continue
+
+        try:
+            mtime = os.path.getmtime(item_path)
+            if mtime < cutoff_time:
+                shutil.rmtree(item_path)
+                logger.info(f"Cleaned up old directory: {item_path}")
+                cleaned_count += 1
+        except Exception as e:
+            logger.warning(f"Failed to clean up {item_path}: {e}")
+            error_count += 1
+
+    if cleaned_count > 0:
+        logger.info(f"Cleanup: removed {cleaned_count} old directories")
+
+    return {"cleaned": cleaned_count, "errors": error_count}
+
+
+def _cleanup_old_logger_structure():
+    """Remove old import_logs/Logger/ structure (migration to date-based directories)"""
+    import shutil
+
+    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
+    old_logger_path = os.path.join(logs_dir, "Logger")
+
+    if os.path.exists(old_logger_path):
+        try:
+            shutil.rmtree(old_logger_path)
+            logger.info(f"Migration: removed old Logger/ structure: {old_logger_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to remove old Logger/ structure: {e}")
+            return False
+    return False
+
+
+def _cleanup_stale_dispatches(max_age_seconds: float = 86400):  # 24h
+    """Clean up dispatch processes older than max_age_seconds"""
+    import time as time_mod
+    import signal
+
+    current_time = time_mod.time()
+    cleaned_count = 0
+
+    for port, info in list(_dispatch_info.items()):
+        created_at = info.get("created_at", 0)
+        age = current_time - created_at
+
+        if age > max_age_seconds:
+            process = info.get("process")
+            date = info.get("date")
+
+            if process and process.poll() is None:
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                    logger.info(f"Killed stale dispatch on port {port} (age: {age:.0f}s, date: {date})")
+                except Exception as e:
+                    logger.warning(f"Failed to kill dispatch on port {port}: {e}")
+
+            # Remove from tracking
+            if port in _dispatch_info:
+                del _dispatch_info[port]
+
+            if date and _dispatch_ports_by_date.get(date) == port:
+                del _dispatch_ports_by_date[date]
+
+            cleaned_count += 1
+
+    return cleaned_count
+
+
 def _run_log_retrieval_job(job_id, project, date, target_dir):
-    """Background job: copy log files from NFS to local import_logs directory, then launch dispatch"""
+    """Background job: copy log files from NFS to local date-based directory, then launch dispatch"""
     try:
         _log_retrieval_jobs[job_id]["status"] = "running"
-        _log_retrieval_jobs[job_id]["progress"] = "Recherche des hostnames..."
-        
-        # Get hostnames from local logs first, then from MySQL
+
+        # Cleanup old directories first
+        _cleanup_old_directories(2)
+
+        # Cleanup stale dispatches
+        _cleanup_stale_dispatches(86400)
+
+        # Get hostnames from MySQL database
+        _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des hostnames pour {project} dans MySQL..."
         valid_hostnames = _get_hostnames_for_project(project)
-        
+
         if not valid_hostnames:
             _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"Aucun log trouvé pour {project}"
+            _log_retrieval_jobs[job_id]["error"] = f"Aucun hostname trouvé pour {project} dans la base MySQL (NFS: {NFS_CONFIG['mount_directory']})"
             return
-        
-        hostname = valid_hostnames[0]  # Use first hostname found
-        _log_retrieval_jobs[job_id]["progress"] = f"Hostname: {hostname}"
-        
-        # Get NFS path
+
+        hostname = valid_hostnames[0]
+        logger.info(f"Log retrieval for {project}: using hostname {hostname}")
+
+        # Get NFS path from configuration
         nfs_path = _get_nfs_log_path(hostname, project)
-        if not nfs_path or not os.path.exists(nfs_path):
+
+        if not nfs_path:
             _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"Chemin NFS non trouvé: {nfs_path}"
+            _log_retrieval_jobs[job_id]["error"] = f"Chemin NFS non configuré pour {hostname}"
             return
-        
+
+        # Check if NFS path exists
+        if not os.path.exists(nfs_path):
+            _log_retrieval_jobs[job_id]["status"] = "error"
+            _log_retrieval_jobs[job_id]["error"] = f"Répertoire NFS introuvable: {nfs_path}"
+            return
+
+        logger.info(f"Log retrieval for {project}: NFS path = {nfs_path}")
+
         # Find files for the date
         date_pattern = date.replace('-', '_')
         pattern = os.path.join(nfs_path, f"log_{date_pattern}*")
+        _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des logs pour la date {date}..."
         files_to_copy = glob.glob(pattern)
-        
+
         if not files_to_copy:
             _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier trouvé pour {date}"
+            _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier log_{date_pattern}* trouvé dans {nfs_path}"
             return
-        
+
         total_files = len(files_to_copy)
         _log_retrieval_jobs[job_id]["total_files"] = total_files
-        _log_retrieval_jobs[job_id]["progress"] = f"Copie de {total_files} fichiers..."
-        
-        # Create target directory structure
-        target_logger_dir = os.path.join(
-            target_dir, "import_logs", "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname
-        )
-        os.makedirs(target_logger_dir, exist_ok=True)
-        
+
+        # Create date-based directory structure: import_logs/{PROJECT}_{DATE}/Logger/{PROJECT}/_/ccenter_ccxml/Ccxml/{hostname}
+        date_based_dir = os.path.join(target_dir, "import_logs", f"{project}_{date}")
+        logger_dir = os.path.join(date_based_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
+
+        os.makedirs(logger_dir, exist_ok=True)
+        logger.info(f"Log retrieval for {project}: created directory structure: {logger_dir}")
+
+        _log_retrieval_jobs[job_id]["progress"] = f"📥 {total_files} fichiers log_{date_pattern}* trouvés sur NFS"
+
         copied = 0
         decompressed = 0
         errors = []
-        
+
         for f in files_to_copy:
             try:
                 basename = os.path.basename(f)
-                dest = os.path.join(target_logger_dir, basename)
-                
-                # Copy file
+                dest = os.path.join(logger_dir, basename)
+
+                # Copy file from NFS to local date-based directory
+                _log_retrieval_jobs[job_id]["progress"] = f"📥 Copie {basename}... ({copied + 1}/{total_files})"
                 shutil.copy2(f, dest)
                 copied += 1
-                
+
                 # Decompress .bz2 files
                 if dest.endswith(".bz2"):
-                    _log_retrieval_jobs[job_id]["progress"] = f"Décompression {basename}... ({copied}/{total_files})"
+                    _log_retrieval_jobs[job_id]["progress"] = f"🗜️ Décompression {basename}... ({copied}/{total_files})"
                     decompressed_path = dest[:-4]
                     try:
                         with bz2.open(dest, 'rb') as bz_file:
@@ -1645,27 +1807,30 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
                                 shutil.copyfileobj(bz_file, out_file)
                         os.remove(dest)
                         decompressed += 1
+                        logger.info(f"Log retrieval for {project}: decompressed {basename}")
                     except Exception as bz_err:
                         errors.append(f"Décompression {basename}: {bz_err}")
-                
+                        logger.warning(f"Log retrieval for {project}: failed to decompress {basename}: {bz_err}")
+
                 _log_retrieval_jobs[job_id]["copied"] = copied
-                _log_retrieval_jobs[job_id]["progress"] = f"Copié {copied}/{total_files} fichiers"
-                
+                _log_retrieval_jobs[job_id]["progress"] = f"📥 {copied}/{total_files} fichiers copiés vers {date_based_dir}/Logger/"
+
             except Exception as e:
                 errors.append(f"Copie {os.path.basename(f)}: {str(e)}")
-        
-        # All files copied, now launch dispatch on a NEW port
-        _log_retrieval_jobs[job_id]["progress"] = "Lancement du dispatch..."
+                logger.error(f"Log retrieval for {project}: failed to copy {os.path.basename(f)}: {e}")
+
+        # All files copied, now launch dispatch on the date-based directory
+        _log_retrieval_jobs[job_id]["progress"] = "🚀 Lancement du dispatch..."
         _log_retrieval_jobs[job_id]["dispatch_launched"] = True
-        
+
         try:
             # Reset the singleton
             from get_users_and_calls import RlogDispatcher
             RlogDispatcher.reset()
-            
-            logs_dir = os.path.join(target_dir, "import_logs")
-            dispatcher = RlogDispatcher(logs_dir)
-            
+
+            # Use the date-based directory as logs_dir
+            dispatcher = RlogDispatcher(date_based_dir)
+
             # SKIP existing dispatches and find a NEW port
             import socket
             new_port = None
@@ -1675,30 +1840,39 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
                     sock.settimeout(1)
                     result = sock.connect_ex(('127.0.0.1', port))
                     sock.close()
-                    if result != 0:  # Port is NOT in use
+                    if result != 0:
                         new_port = port
                         break
                 except:
                     pass
-            
-            # Use the new port if found
+
             if new_port:
                 dispatcher.port = new_port
-            
-            # Manually launch the dispatch without checking for existing ones
-            logs_path = dispatcher.create_logger_structure()
-            
-            if not logs_path:
-                raise RuntimeError(f"Aucun fichier .log trouvé dans {logs_dir}")
-            
+
+            # Create logger structure in the date-based directory
+            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Lancement du dispatch pour {project} sur port {dispatcher.port}..."
+            dispatcher.create_logger_structure(project, hostname)
+
+            # Dispatch expects Logger/ as root, not the full path
+            logs_path = os.path.join(date_based_dir, "Logger")
+            logger.info(f"Log retrieval for {project}: dispatch logs_path = {logs_path}")
+            logger.info(f"Log retrieval for {project}: date_based_dir = {date_based_dir}")
+
+            if not os.path.exists(logs_path):
+                raise RuntimeError(f"Répertoire Logger non trouvé: {logs_path}")
+
+            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch sur port {dispatcher.port}, logs: {logs_path}/"
+
             import os as os_mod
             env = os_mod.environ.copy()
             env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
-            
-            interface_path = os_mod.path.join(os_mod.path.dirname(os_mod.path.abspath(__file__)), "debug_interface.xml")
+
+            interface_path = os_mod.path.join(os_mod.path.dirname(os.path.abspath(__file__)), "debug_interface.xml")
             if not os_mod.path.exists(interface_path):
-                interface_path = os_mod.path.join(logs_dir, "debug_interface.xml")
-            
+                interface_path = os_mod.path.join(date_based_dir, "debug_interface.xml")
+
+            logger.info(f"Log retrieval for {project}: launching dispatch on port {dispatcher.port}")
+
             cmd = [
                 dispatcher.DISPATCH_BIN,
                 "-slave", str(dispatcher.port),
@@ -1706,7 +1880,9 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
                 "-interface", interface_path,
                 "-stderr"
             ]
-            
+
+            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch en cours de démarrage sur le port {dispatcher.port}..."
+
             import subprocess as sp
             dispatcher.process = sp.Popen(
                 cmd,
@@ -1715,38 +1891,44 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
                 stderr=sp.PIPE,
                 preexec_fn=os_mod.setsid
             )
-            
+
             import time as time_mod
             time_mod.sleep(10)
-            
+
             if dispatcher.process.poll() is not None:
                 stderr = dispatcher.process.stderr.read().decode() if dispatcher.process.stderr else ""
+                logger.error(f"Log retrieval for {project}: dispatch failed to start: {stderr}")
                 raise RuntimeError(f"Dispatch arrêté: {stderr}")
-            
+
+            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch démarré, chargement des logs pour {date}..."
             dispatcher._last_activity = time_mod.time()
             port = dispatcher.port
-            
+
             day = date.replace("-", "_")
-            logger.info(f"Loading day {date} into NEW dispatch on port {port}")
+            logger.info(f"Log retrieval for {project}: loading day {date} into dispatch on port {port}")
             dispatcher._load_day(day)
             time_mod.sleep(2)
-            
+
             # Register the dispatch process so we can track and clean it up later
             register_dispatch(date, port, dispatcher.process)
-            
+
             _log_retrieval_jobs[job_id]["status"] = "done"
-            _log_retrieval_jobs[job_id]["progress"] = f"Terminé: {copied} fichiers copiés, {decompressed} décompressés. Dispatch sur port {port}"
+            _log_retrieval_jobs[job_id]["progress"] = f"✅ Terminé: {copied} fichiers copiés, {decompressed} décompressés. Dispatch sur port {port}"
             _log_retrieval_jobs[job_id]["dispatch_port"] = port
             _log_retrieval_jobs[job_id]["copied"] = copied
             _log_retrieval_jobs[job_id]["decompressed"] = decompressed
-            
+            _log_retrieval_jobs[job_id]["directory"] = date_based_dir
+
+            logger.info(f"Log retrieval for {project}: completed successfully - {copied} copied, {decompressed} decompressed, dispatch on port {port}")
+
         except Exception as dispatch_err:
             _log_retrieval_jobs[job_id]["status"] = "done_with_errors"
-            _log_retrieval_jobs[job_id]["progress"] = f"Terminé: {copied} fichiers copiés, {decompressed} décompressés. Erreur dispatch: {dispatch_err}"
+            _log_retrieval_jobs[job_id]["progress"] = f"⚠️ Terminé avec erreurs: {copied} fichiers copiés, {decompressed} décompressés. Erreur dispatch: {dispatch_err}"
             _log_retrieval_jobs[job_id]["dispatch_error"] = str(dispatch_err)
-        
+            logger.error(f"Log retrieval for {project}: dispatch error: {dispatch_err}")
+
         _log_retrieval_jobs[job_id]["errors"] = errors
-        
+
     except Exception as e:
         _log_retrieval_jobs[job_id]["status"] = "error"
         _log_retrieval_jobs[job_id]["error"] = str(e)
@@ -1868,6 +2050,9 @@ if __name__ == "__main__":
         state.available_servers = {}
 
     print()
+    print("Running migrations...")
+    _cleanup_old_logger_structure()
+
     print(f"Server running: http://{FLASK_CONFIG['host']}:{FLASK_CONFIG['port']}")
     print("  - Go to / for project selection")
     print("  - Go to /cst_explorer/PROJECT_NAME to access a project directly")

@@ -688,29 +688,31 @@ class RlogDispatcher:
     def create_logger_structure(self, project: str = "ARTELIA", hostname: str = "ps-ics-prd-cst-fr-529") -> str:
         """Crée la structure Logger/PROJECT/_/ccenter_ccxml/Ccxml/HOSTNAME à partir de import_logs"""
         import_logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
-        
-        # Return Logger path for dispatch (dispatch expects Logger as root)
-        logger_parent = os.path.join(self.logs_dir, "Logger")
-        if os.path.exists(logger_parent):
-            log_files = glob.glob(os.path.join(logger_parent, "**/log_*.log"), recursive=True)
+
+        # Return the specific project path for dispatch (only this project's logs)
+        project_logger_dir = os.path.join(self.logs_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
+
+        # Check if this specific project path exists and has log files
+        if os.path.exists(project_logger_dir):
+            log_files = glob.glob(os.path.join(project_logger_dir, "log_*.log"))
             if log_files:
-                return logger_parent
-        
+                print(f"✅ Trouvé {len(log_files)} fichiers logs pour {project} dans {project_logger_dir}", file=sys.stderr)
+                return project_logger_dir
+
         # Create structure and copy logs
-        logger_dir = os.path.join(self.logs_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
-        os.makedirs(logger_dir, exist_ok=True)
-        
-        # Copy log files
+        os.makedirs(project_logger_dir, exist_ok=True)
+
+        # Copy log files from import_logs (flat directory)
         log_files = glob.glob(os.path.join(import_logs_dir, "log_*.log"))
         for log_file in log_files:
             try:
                 import shutil
-                shutil.copy(log_file, logger_dir)
+                shutil.copy(log_file, project_logger_dir)
             except Exception as e:
                 print(f"Warning: Could not copy {log_file}: {e}", file=sys.stderr)
-        
-        print(f"✅ Copié {len(log_files)} fichiers logs vers {logger_dir}", file=sys.stderr)
-        return logger_parent
+
+        print(f"✅ Copié {len(log_files)} fichiers logs vers {project_logger_dir}", file=sys.stderr)
+        return project_logger_dir
     
     def get_logs_path(self) -> str:
         """Retourne le chemin des logs pour le dispatch"""
