@@ -41,29 +41,23 @@ RUN pip3 install --no-cache-dir --root-user-action=ignore \
     find /usr/local -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
 # Create app user and directory structure
-RUN useradd -m -s /bin/sh -u 1000 cccp && \
-    mkdir -p /app && \
+RUN mkdir -p /app && \
     mkdir /app/import_logs && \
-    mkdir -p /app/debug/NFS && \
-    chown cccp:cccp /app
+    mkdir -p /opt/debug/NFS 
     
 
 # Set working directory
 WORKDIR /app
 
 # Copy application files
-COPY --chown=cccp:cccp ccenter_dispatch ccenter_ccxml ccenter_update ccenter_report web_server.py get_users_and_calls.py config.py debug_interface.xml ./
-COPY --chown=cccp:cccp templates/ ./templates/
+COPY ccenter_dispatch ccenter_ccxml ccenter_update ccenter_report web_server.py get_users_and_calls.py config.py debug_interface.xml ./
+COPY templates/ ./templates/
 
 # Set permissions
 RUN chmod +x /app/ccenter_report && \
     chmod +x /app/ccenter_dispatch && \
     chmod +x /app/ccenter_ccxml && \
-    chmod +x /app/ccenter_update && \
-    chown -R cccp:cccp /app
-
-# Switch to non-root user
-USER cccp
+    chmod +x /app/ccenter_update
 
 
 
