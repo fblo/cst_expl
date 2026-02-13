@@ -45,6 +45,8 @@ RUN useradd -m -s /bin/sh -u 1000 cccp && \
     mkdir -p /app && \
     mkdir import_logs && \
     chown cccp:cccp /app
+# Create directory for NFS mount
+RUN mkdir -p /app/debug/NFS
 
 # Set working directory
 WORKDIR /app
@@ -63,11 +65,7 @@ RUN chmod +x /app/ccenter_report && \
 # Switch to non-root user
 USER cccp
 
-# Create directory for NFS mount
-RUN mkdir -p /opt/debug/NFS
 
-# Declare volume for NFS mount
-VOLUME ["/opt/debug/NFS"]
 
 # Environment variables for optimization
 ENV FLASK_HOST=0.0.0.0 \
