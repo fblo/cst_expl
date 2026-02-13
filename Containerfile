@@ -16,6 +16,7 @@ RUN dnf -y install --setopt=install_weak_deps=False --nodocs \
         glibc \
         cryptopp \
         sshpass \
+        scp \
         && \
     dnf -y clean all && \
     rm -rf /var/cache/yum/* \
