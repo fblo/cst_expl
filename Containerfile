@@ -2,7 +2,7 @@
 FROM fedora:39 AS runtime
 
 LABEL maintainer="ccc_report_dashboard"
-LABEL description="Ultra-optimized CCCP Dashboard Web Server"
+LABEL description="CCCP Dashboard Web Server"
 LABEL version="1.0"
 
 # Install minimal dependencies with aggressive cleanup
@@ -43,10 +43,10 @@ RUN pip3 install --no-cache-dir --root-user-action=ignore \
 # Create app user and directory structure
 RUN useradd -m -s /bin/sh -u 1000 cccp && \
     mkdir -p /app && \
-    mkdir import_logs && \
+    mkdir /app/import_logs && \
+    mkdir -p /app/debug/NFS && \
     chown cccp:cccp /app
-# Create directory for NFS mount
-RUN mkdir -p /app/debug/NFS
+    
 
 # Set working directory
 WORKDIR /app
@@ -80,6 +80,6 @@ ENV FLASK_HOST=0.0.0.0 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONOPTIMIZE=1
 
-EXPOSE 500
+EXPOSE 5000
 
 CMD ["python3", "web_server.py"]
