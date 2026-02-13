@@ -784,10 +784,11 @@
                     <span class="card-title">📁 Logs Explorer</span>
                     <div style="display: flex; gap: 12px; align-items: center; flex: 1; justify-content: flex-end;">
                         <div class="global-search" style="display: flex; gap: 8px;">
-                            <input type="text" id="logsGlobalSearch" placeholder="🔍 Numéro, projet, date..." 
+                            <input type="text" id="logsGlobalSearch" placeholder="🔍 Numéro, projet, date..."
                                 style="padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 220px;"
                                 onkeypress="if(event.key==='Enter') performLogsGlobalSearch()">
                             <button class="btn btn-secondary" onclick="performLogsGlobalSearch()" style="padding: 6px 12px;">Rechercher</button>
+                            <button class="btn" onclick="clearLogsGlobalSearch()" id="logsClearSearchBtn" style="padding: 6px 12px; display: none;">✕</button>
                         </div>
                     </div>
                 </div>
@@ -802,8 +803,12 @@
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label>Date</label>
-                            <input type="date" id="logs-date" 
-                                style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px;">
+                            <div style="display: flex; gap: 4px;">
+                                <button class="btn btn-secondary" onclick="setYesterdayDate()" style="padding: 8px 12px; white-space: nowrap;" title="Yesterday">Yesterday</button>
+                                <button class="btn btn-secondary" onclick="setTodayDate()" style="padding: 8px 12px; white-space: nowrap;" title="Today">Today</button>
+                                <input type="date" id="logs-date" 
+                                    style="flex: 1; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px;">
+                            </div>
                         </div>
                         <button class="btn btn-primary" onclick="retrieveLogs()" id="btn-retrieve" style="white-space: nowrap;">
                             📥 Retrieve & Load
@@ -820,6 +825,12 @@
 
                     <!-- Completion Status -->
                     <div id="completion-status" style="margin-top: 16px; font-size: 12px; display: none;"></div>
+
+                    <!-- Snapshots Buttons -->
+                    <div id="snapshots-container" style="margin-top: 16px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Snapshots disponibles:</div>
+                        <div id="snapshots-buttons" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1277,6 +1288,16 @@
 
             document.getElementById('sessions-count').textContent = sessionList.length + (isGlobalSearch ? ' résultats' : ' sessions');
 
+            // Update project display in stats bar
+            const projectElements = new Set();
+            sessionList.forEach(s => {
+                if (s.project && s.project !== '-') {
+                    projectElements.add(s.project);
+                }
+            });
+            const projectDisplay = projectElements.size > 0 ? Array.from(projectElements).join(', ') : '-';
+            document.getElementById('stat-project').textContent = projectDisplay;
+
             if (sessionList.length === 0) {
                 const msg = isGlobalSearch 
                     ? `Aucun résultat pour "${searchTerm}"`
@@ -1292,7 +1313,7 @@
                     const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? session.caller : '-';
                     const called = (session.called && session.called.toLowerCase() !== 'undefined') ? session.called : '-';
                     const createDate = session.create_date || '-';
-                    const project = session.project || (isGlobalSearch ? window.logsSearchProject : '');
+                    const project = session.project || '-';
 
                     const showPhones = caller !== '-' || called !== '-';
 
@@ -1314,12 +1335,7 @@
             const searchTerm = document.getElementById('logsGlobalSearch').value.trim();
 
             if (!searchTerm) {
-                // Reset to local sessions
-                window.logsIsGlobalSearch = false;
-                window.logsSearchTerm = '';
-                if (window.logsLocalSessions) {
-                    renderLogsSessions(window.logsLocalSessions);
-                }
+                clearLogsGlobalSearch();
                 return;
             }
 
@@ -1347,21 +1363,97 @@
                         create_date: r.create_date || '',
                         project: r.project || ''
                     }));
-                    
+
+                    // Store local sessions before search
+                    if (!window.logsLocalSessions) {
+                        window.logsLocalSessions = window.logsSessions || {};
+                    }
+
                     window.logsIsGlobalSearch = true;
                     window.logsSearchTerm = searchTerm;
-                    window.logsLocalSessions = window.logsSessions || {};  // Keep local sessions
                     window.logsSessions = {};
                     results.forEach(s => { window.logsSessions[s.id] = s; });
-                    
+
                     renderLogsSessions(window.logsSessions);
                     statusEl.textContent = `🔍 ${data.count || 0} résultats pour "${searchTerm}"`;
+
+                    // Show clear button
+                    document.getElementById('logsClearSearchBtn').style.display = 'inline-block';
                 } else {
                     statusEl.textContent = 'Erreur: ' + (data.error || 'inconnue');
                 }
             } catch (e) {
                 statusEl.textContent = 'Erreur: ' + e.message;
             }
+        }
+
+        function clearLogsGlobalSearch() {
+            // Clear search state
+            window.logsIsGlobalSearch = false;
+            window.logsSearchTerm = '';
+            document.getElementById('logsGlobalSearch').value = '';
+            document.getElementById('logsClearSearchBtn').style.display = 'none';
+
+            // Restore local sessions
+            if (window.logsLocalSessions) {
+                window.logsSessions = window.logsLocalSessions;
+                renderLogsSessions(window.logsSessions);
+            }
+
+            // Hide progress container
+            const container = document.getElementById('progress-container');
+            if (container) {
+                container.style.display = 'none';
+            }
+        }
+
+        // Load and display snapshot buttons
+        async function loadSnapshotsButtons() {
+            try {
+                const res = await fetch('/api/logs/snapshots');
+                const data = await res.json();
+
+                if (data.success && data.snapshots) {
+                    renderSnapshotsButtons(data.snapshots);
+                }
+            } catch (e) {
+                console.error('Error loading snapshots:', e);
+            }
+        }
+
+        function renderSnapshotsButtons(snapshots) {
+            const container = document.getElementById('snapshots-buttons');
+            if (!container) return;
+
+            if (snapshots.length === 0) {
+                container.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">Aucun snapshot</span>';
+                return;
+            }
+
+            container.innerHTML = snapshots.map(s => {
+                const name = `${s.project}_${s.date}`;
+                const age = formatAge(s.age_seconds);
+                return `<button class="btn btn-secondary" onclick="loadSnapshot('${s.project}', '${s.date}')" 
+                    style="padding: 4px 10px; font-size: 11px;" title="${name} - ${s.files_count} fichiers - ${age}">
+                    📁 ${name}
+                </button>`;
+            }).join('');
+        }
+
+        function formatAge(seconds) {
+            if (seconds < 60) return 'il y a quelques secondes';
+            if (seconds < 3600) return `il y a ${Math.floor(seconds / 60)}min`;
+            if (seconds < 86400) return `il y a ${Math.floor(seconds / 3600)}h`;
+            return `il y a ${Math.floor(seconds / 86400)}j`;
+        }
+
+        async function loadSnapshot(project, date) {
+            // Set project and date
+            document.getElementById('logs-project').value = project;
+            document.getElementById('logs-date').value = date;
+
+            // Trigger retrieval (will use snapshot if available)
+            await retrieveLogs();
         }
 
         function openRlogConsole(sessionId, date) {
@@ -1549,6 +1641,9 @@
                     refreshAllViews();
                 }
             });
+
+            // Load snapshot buttons
+            loadSnapshotsButtons();
         });
 
         // Fonction pour rafraîchir toutes les vues
@@ -1613,9 +1708,31 @@
         let selectedLogsDate = '';
         let retrieveJobId = null;
 
+        // Set date input to yesterday
+        function setYesterdayDate() {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yyyy = yesterday.getFullYear();
+            const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
+            const dd = String(yesterday.getDate()).padStart(2, '0');
+            document.getElementById('logs-date').value = `${yyyy}-${mm}-${dd}`;
+        }
+
+        // Set date input to today
+        function setTodayDate() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('logs-date').value = `${yyyy}-${mm}-${dd}`;
+        }
+
         // Initialize logs explorer when tab is clicked
         async function loadLogsExplorer() {
             const projectSelect = document.getElementById('logs-project');
+            
+            // Refresh snapshots buttons (in case new ones were created)
+            loadSnapshotsButtons();
             
             // Only load projects once
             if (logsProjects.length === 0) {
@@ -1787,14 +1904,18 @@
                 if (data.success) {
                     const sessions = data.sessions || {};
                     const sessionList = Object.values(sessions);
-                    
+
+                    // Store for potential search/restore
+                    window.logsSessions = sessions;
+                    window.logsLocalSessions = sessions;
+
                     countEl.textContent = sessionList.length + ' sessions';
-                    
+
                     if (sessionList.length === 0) {
                         container.innerHTML = '<div class="empty-state">Aucune session trouvée pour cette date</div>';
                         return;
                     }
-                    
+
                     container.innerHTML = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px;">' +
                         sessionList.map(session => {
                             const createDate = session.create_date || '-';
@@ -1804,7 +1925,7 @@
                                 </div>
                                 <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">${escapeHtml(createDate)}</div>
                                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 10px;">
-                                    <div><span style="color: var(--text-secondary);">Type:</span> <span style="color: var(--accent-color);">${escapeHtml(session.type || 'call')}</span></div>
+                                    <div><span style="color: var(--text-secondary);">Project:</span> <span style="color: var(--accent-color);">${escapeHtml(session.project || '-')}</span></div>
                                     <div><span style="color: var(--text-secondary);">Caller:</span> <span style="color: var(--success-color);">${escapeHtml(session.caller || '-')}</span></div>
                                     <div><span style="color: var(--text-secondary);">Called:</span> <span style="color: var(--warning-color);">${escapeHtml(session.called || '-')}</span></div>
                                 </div>

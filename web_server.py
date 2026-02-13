@@ -20,9 +20,52 @@ import mysql.connector
 import os
 
 # Import configuration
-from config import MYSQL_CONFIG, FLASK_CONFIG, NFS_CONFIG
+from config import MYSQL_CONFIG, FLASK_CONFIG, NFS_CONFIG, LOGGING_CONFIG, SNAPSHOTS_FILE, SSH_CONFIG
 from get_users_and_calls import RlogDispatcher
 import threading
+
+# Setup logging based on configuration
+LOG_LEVEL = getattr(logging, LOGGING_CONFIG.get("level", "INFO").upper())
+LOG_MODE = LOGGING_CONFIG.get("mode", "normal")
+
+if LOG_MODE == "quiet":
+    # Only show WARNING and above
+    logging.basicConfig(level=logging.WARNING)
+elif LOG_MODE == "verbose":
+    # Show DEBUG and above
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s:%(message)s')
+else:
+    # Normal mode: INFO but filter verbose functions
+    logging.basicConfig(level=logging.INFO)
+
+# Create the cccp logger
+logger = logging.getLogger("cccp")
+
+# Suppress werkzeug request logs in normal mode
+logging.getLogger("werkzeug").setLevel(logging.WARNING if LOG_MODE == "normal" else logging.DEBUG)
+
+# Add filter to reduce verbose INFO logs in normal mode
+class VerboseFilter(logging.Filter):
+    def __init__(self):
+        super().__init__()
+        # Patterns to suppress in normal mode
+        self.suppress_patterns = [
+            "_get_session_caller_called",
+            "ccenter_report",
+        ]
+    
+    def filter(self, record):
+        if LOG_MODE != "normal":
+            return True
+        msg = record.getMessage()
+        for pattern in self.suppress_patterns:
+            if pattern in msg:
+                return False
+        return True
+
+# Apply filter to the root logger handler if it exists
+for handler in logging.root.handlers:
+    handler.addFilter(VerboseFilter())
 
 # Global dispatch instance
 _rlog_dispatcher = None
@@ -49,9 +92,6 @@ def _start_dispatch_async():
     except Exception as e:
         logger.error(f"Error starting dispatch in background: {e}")
     _dispatch_start_thread = None
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("cccp")
 
 app = Flask(__name__, template_folder="templates")
 app.jinja_env.auto_reload = True
@@ -189,6 +229,27 @@ _dispatch_info = {}  # port -> {"date": date, "project": str, "created_at": time
 _log_snapshots = {}  # key: "PROJECT_YYYY-MM-DD" -> {"project": str, "date": str, "port": int, "directory": str, "created_at": timestamp, "files_count": int}
 
 
+def load_snapshots_from_disk():
+    """Charge les snapshots depuis le fichier JSON au démarrage"""
+    global _log_snapshots
+    if os.path.exists(SNAPSHOTS_FILE):
+        try:
+            with open(SNAPSHOTS_FILE, 'r') as f:
+                _log_snapshots = json.load(f)
+            logger.info(f"Loaded {len(_log_snapshots)} snapshots from disk")
+        except Exception as e:
+            logger.warning(f"Failed to load snapshots: {e}")
+
+
+def save_snapshots_to_disk():
+    """Sauvegarde tous les snapshots dans le fichier JSON"""
+    try:
+        with open(SNAPSHOTS_FILE, 'w') as f:
+            json.dump(_log_snapshots, f, indent=2)
+    except Exception as e:
+        logger.error(f"Failed to save snapshots: {e}")
+
+
 def get_log_snapshot(project: str, date: str) -> Optional[dict]:
     """Get a log snapshot for a specific project and date"""
     key = f"{project}_{date}"
@@ -208,6 +269,7 @@ def save_log_snapshot(project: str, date: str, port: int, directory: str, files_
         "files_count": files_count
     }
     logger.info(f"Saved log snapshot: {key} (port={port}, files={files_count})")
+    save_snapshots_to_disk()
 
 
 def cleanup_old_snapshots(max_age_days: float = 7):
@@ -223,12 +285,13 @@ def cleanup_old_snapshots(max_age_days: float = 7):
 
     if cleaned > 0:
         logger.info(f"Cleaned up {cleaned} old log snapshots")
+        save_snapshots_to_disk()
 
     return cleaned
 
 
-def cleanup_stale_dispatches(max_age_seconds: float = 1800):
-    """Clean up dispatch processes older than max_age_seconds (default: 30 minutes)"""
+def cleanup_stale_dispatches(max_age_seconds: float = 7200):
+    """Clean up dispatch processes older than max_age_seconds (default: 2 hours)"""
     import time as time_mod
 
     current_time = time_mod.time()
@@ -251,6 +314,12 @@ def cleanup_stale_dispatches(max_age_seconds: float = 1800):
                 except Exception as e:
                     logger.warning(f"Failed to kill stale dispatch on port {port}: {e}")
 
+            # Delete linked snapshot (snapshots have same lifetime as dispatch)
+            snapshot_key = info.get("snapshot_key")
+            if snapshot_key and snapshot_key in _log_snapshots:
+                del _log_snapshots[snapshot_key]
+                save_snapshots_to_disk()
+
             date = info.get("date")
             if date and _dispatch_ports_by_date.get(date) == port:
                 del _dispatch_ports_by_date[date]
@@ -261,11 +330,13 @@ def register_dispatch(date: str, port: int, process, project: str = ""):
     import time as time_mod
 
     _dispatch_ports_by_date[date] = port
+    snapshot_key = f"{project}_{date}" if project else None
     _dispatch_info[port] = {
         "date": date,
         "project": project,
         "created_at": time_mod.time(),
-        "process": process
+        "process": process,
+        "snapshot_key": snapshot_key
     }
     logger.info(f"Registered dispatch on port {port} for date {date} (project: {project})")
 
@@ -702,18 +773,6 @@ def rlog_console_light():
     return render_template("rlog_console_light.html")
 
 
-@app.route("/logs_explorer")
-def logs_explorer():
-    """Unified logs explorer - combines RLOG and NFS log viewing"""
-    return render_template("logs_explorer.html")
-
-
-@app.route("/logs_explorer_light")
-def logs_explorer_light():
-    """Unified logs explorer - combines RLOG and NFS log viewing (light theme)"""
-    return render_template("logs_explorer_light.html")
-
-
 @app.route("/api/rlog/status")
 def api_rlog_status():
     """Get RlogDispatcher status"""
@@ -1104,10 +1163,15 @@ def api_rlog_sessions():
                     if not called_num and len(parts) >= 5 and parts[4].strip() and parts[4].strip().lower() != "undefined":
                         called_num = parts[4].strip()
 
+                    # Get project from dispatch info
+                    dispatch_info = _dispatch_info.get(port, {})
+                    project = dispatch_info.get("project", "")
+
                     sessions[session_id] = {
                         "id": session_id,
                         "object_id": object_id,
                         "type": "call_session",
+                        "project": project,
                         "caller": caller_num,
                         "called": called_num,
                         "create_date": create_date
@@ -1376,7 +1440,9 @@ def api_rlog_session_detail():
                     col_target = parts[2].strip() if len(parts) > 2 else ""
                     col_state = parts[3].strip() if len(parts) > 3 else ""
                     col_name = parts[4].strip() if len(parts) > 4 else ""
-                    col_data = "|".join(parts[5:]).strip() if len(parts) > 5 else ""
+                    col_data = "|".join(parts[5:]).strip()
+                    if col_data.endswith("|"):
+                        col_data = col_data[:-1]
                     
                     output_columns.append({
                         "date": col_date,
@@ -1504,7 +1570,9 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
                         col_target = parts[2].strip() if len(parts) > 2 else ""
                         col_state = parts[3].strip() if len(parts) > 3 else ""
                         col_name = parts[4].strip() if len(parts) > 4 else ""
-                        col_data = "|".join(parts[5:]).strip() if len(parts) > 5 else ""
+                    col_data = "|".join(parts[5:]).strip()
+                    if col_data.endswith("|"):
+                        col_data = col_data[:-1]
                         
                         output_columns.append({
                             "date": col_date,
@@ -1881,17 +1949,26 @@ def _get_local_hostnames_for_project(project):
     
     logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
     
-    # Look for Logger/PROJECT/*/ccenter_ccxml/Ccxml/HOSTNAME structure
-    pattern = os.path.join(logs_dir, "Logger", project, "*", "ccenter_ccxml", "Ccxml", "*")
     hostnames = set()
     
-    for path in glob.glob(pattern):
+    # Look for date-based structure: {PROJECT}_{DATE}/Logger/{PROJECT}/_/ccenter_ccxml/Ccxml/HOSTNAME
+    date_pattern = os.path.join(logs_dir, f"{project}_*", "Logger", project, "_", "ccenter_ccxml", "Ccxml", "*")
+    for path in glob.glob(date_pattern):
         hostname = os.path.basename(path)
-        # Exclude hidden directories and non-hostname paths
         if hostname and not hostname.startswith('.') and '_' not in hostname:
             hostnames.add(hostname)
     
-    return list(hostnames) if hostnames else []
+    # Also check old structure: Logger/PROJECT/*/ccenter_ccxml/Ccxml/HOSTNAME
+    old_pattern = os.path.join(logs_dir, "Logger", project, "*", "ccenter_ccxml", "Ccxml", "*")
+    for path in glob.glob(old_pattern):
+        hostname = os.path.basename(path)
+        if hostname and not hostname.startswith('.') and '_' not in hostname:
+            hostnames.add(hostname)
+    
+    if hostnames:
+        logger.info(f"Local hostnames found for {project}: {list(hostnames)}")
+    
+    return list(hostnames)
 
 
 def _get_local_log_path(hostname, project):
@@ -1994,13 +2071,17 @@ def _cleanup_stale_dispatches(max_age_seconds: float = 86400):  # 24h
 
 
 def _run_log_retrieval_job(job_id, project, date, target_dir):
-    """Background job: copy log files from NFS to local date-based directory, then launch dispatch"""
+    """Background job: copy log files from NFS or SSH to local directory, then launch dispatch"""
+    import time as time_mod
+    
     try:
         _log_retrieval_jobs[job_id]["status"] = "running"
 
-        # Cleanup old directories and snapshots
-        _cleanup_old_directories(2)
-        cleanup_old_snapshots(7)
+        # Check if date is today
+        today_str = time_mod.strftime("%Y-%m-%d")
+        is_today = (date == today_str)
+        
+        logger.info(f"Log retrieval for {project}: date={date}, is_today={is_today}")
 
         # Check if we have an existing snapshot for this project/date
         existing_snapshot = get_log_snapshot(project, date)
@@ -2008,31 +2089,53 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
         if existing_snapshot:
             snapshot_port = existing_snapshot.get("port")
             snapshot_dir = existing_snapshot.get("directory")
+            snapshot_files_count = existing_snapshot.get("files_count", 0)
 
             # Check if dispatch is still running on that port
             if snapshot_port and snapshot_port in _dispatch_info:
                 info = _dispatch_info.get(snapshot_port, {})
                 process = info.get("process")
                 if process and process.poll() is None:
-                    # Use existing dispatch
-                    _log_retrieval_jobs[job_id]["progress"] = f"✅ Snapshot trouvé: dispatch sur port {snapshot_port}"
+                    # Use existing dispatch - ULTRA FAST!
+                    _log_retrieval_jobs[job_id]["progress"] = f"✅ Snapshot: dispatch actif sur port {snapshot_port}"
                     _log_retrieval_jobs[job_id]["cached"] = True
                     _log_retrieval_jobs[job_id]["dispatch_port"] = snapshot_port
                     _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
                     _log_retrieval_jobs[job_id]["status"] = "done"
-                    _log_retrieval_jobs[job_id]["copied"] = existing_snapshot.get("files_count", 0)
+                    _log_retrieval_jobs[job_id]["copied"] = snapshot_files_count
                     _log_retrieval_jobs[job_id]["snapshot_used"] = True
 
-                    # Register dispatch if not already registered for this date
                     if date not in _dispatch_ports_by_date:
                         _dispatch_ports_by_date[date] = snapshot_port
 
-                    logger.info(f"Log retrieval for {project}: using existing snapshot on port {snapshot_port}")
+                    logger.info(f"Log retrieval for {project}: using existing dispatch on port {snapshot_port}")
                     return
 
-        # No existing snapshot, proceed with normal retrieval
+            # Snapshot exists but dispatch not running - check if logs are local (FAST PATH)
+            if os.path.exists(snapshot_dir):
+                existing_logs = glob.glob(os.path.join(snapshot_dir, "**", "log_*.log"), recursive=True)
+                existing_logs_compressed = glob.glob(os.path.join(snapshot_dir, "**", "log_*.bz2"), recursive=True)
+
+                if existing_logs or existing_logs_compressed:
+                    # Logs are local! Skip NFS, just launch new dispatch
+                    _log_retrieval_jobs[job_id]["progress"] = "📁 Logs locaux détectés, lancement dispatch..."
+                    _log_retrieval_jobs[job_id]["cached"] = True
+                    _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
+                    _log_retrieval_jobs[job_id]["files_source"] = "local"
+
+                    logger.info(f"Log retrieval for {project}: snapshot found but dispatch dead, logs are local at {snapshot_dir}")
+
+                    # Find a new port and launch dispatch
+                    _cleanup_stale_dispatches(7200)
+                    _launch_dispatch_for_job(job_id, project, date, snapshot_dir)
+                    return
+
+            # Snapshot exists but no local logs - proceed with normal retrieval
+            logger.info(f"Log retrieval for {project}: snapshot exists but no local logs, checking NFS...")
+
+        # No snapshot or no local logs - proceed with normal retrieval
         # Cleanup stale dispatches
-        _cleanup_stale_dispatches(86400)
+        _cleanup_stale_dispatches(7200)  # 2 hours max age for dispatches
 
         # Get hostnames from MySQL database
         _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des hostnames pour {project} dans MySQL..."
@@ -2040,12 +2143,79 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
 
         if not valid_hostnames:
             _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"Aucun hostname trouvé pour {project} dans la base MySQL (NFS: {NFS_CONFIG['mount_directory']})"
+            _log_retrieval_jobs[job_id]["error"] = f"ERREUR, NFS vers ccc_logs non monté ! ({NFS_CONFIG['mount_directory']})"
             return
 
         hostname = valid_hostnames[0]
         logger.info(f"Log retrieval for {project}: using hostname {hostname}")
 
+        # Create date-based directory structure: import_logs/{PROJECT}_{DATE}/Logger/{PROJECT}/_/ccenter_ccxml/Ccxml/{hostname}
+        date_based_dir = os.path.join(target_dir, "import_logs", f"{project}_{date}")
+        
+        if is_today:
+            # Today's logs: use SSH/SCP from remote server
+            _log_retrieval_jobs[job_id]["progress"] = "🔍 Récupération des logs du jour via SSH..."
+            
+            # Create local directory structure matching the exact dispatch structure
+            logger_dir = os.path.join(date_based_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
+            os.makedirs(logger_dir, exist_ok=True)
+            logger.info(f"Log retrieval for {project}: local dir = {logger_dir}")
+            
+            # Remote path: /opt/consistent/logs/ARTELIA/Logger/ARTELIA/_/ccenter_ccxml/Ccxml/ps-ics-prd-cst-fr-529/log_2026_02_12*
+            date_pattern = date.replace('-', '_')
+            remote_dir = os.path.join(SSH_CONFIG["remote_base_path"], project, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
+            remote_pattern = f"log_{date_pattern}_*.log"
+            logger.info(f"Log retrieval for {project}: SSH remote = {hostname}:{remote_dir}/{remote_pattern}")
+            
+            _log_retrieval_jobs[job_id]["progress"] = f"📥 SCP: copie des logs {date} depuis {hostname}..."
+            
+            # Use sshpass + scp with legacy SSH options for old CST servers
+            sshpass_cmd = [
+                "sshpass", "-p", SSH_CONFIG["password"],
+                "scp", "-o", "StrictHostKeyChecking=no",
+                "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+                "-o", "HostKeyAlgorithms=+ssh-rsa",
+                "-o", "KexAlgorithms=+diffie-hellman-group1-sha1",
+                f"{SSH_CONFIG['user']}@{hostname}:{remote_dir}/{remote_pattern}",
+                logger_dir + "/"
+            ]
+            
+            logger.info(f"Log retrieval for {project}: running sshpass scp command")
+            scp_result = subprocess.run(
+                sshpass_cmd,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 min timeout
+            )
+            
+            if scp_result.returncode != 0:
+                logger.warning(f"Log retrieval for {project}: scp stderr: {scp_result.stderr}")
+                if "sshpass" in scp_result.stderr or "not found" in scp_result.stderr.lower():
+                    _log_retrieval_jobs[job_id]["error"] = "ERREUR: sshpass non installé (requis pour SCP)"
+                    _log_retrieval_jobs[job_id]["status"] = "error"
+                    return
+            
+            # Count copied files
+            copied_logs = glob.glob(os.path.join(logger_dir, "log_*.log"))
+            copied = len(copied_logs)
+            logger.info(f"Log retrieval for {project}: copied {copied} files via SCP")
+            
+            if copied == 0:
+                _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier log_{date_pattern}_*.log trouvé sur {hostname}"
+                _log_retrieval_jobs[job_id]["status"] = "error"
+                return
+            
+            _log_retrieval_jobs[job_id]["progress"] = f"✅ {copied} fichiers copiés via SSH"
+            _log_retrieval_jobs[job_id]["copied"] = copied
+            _log_retrieval_jobs[job_id]["files_source"] = "ssh"
+            
+            # Launch dispatch with local logs
+            _log_retrieval_jobs[job_id]["progress"] = "🚀 Lancement du dispatch..."
+            _cleanup_stale_dispatches(7200)
+            _launch_dispatch_for_job(job_id, project, date, date_based_dir)
+            return
+        
+        # Not today: use NFS as before
         # Get NFS path from configuration
         nfs_path = _get_nfs_log_path(hostname, project)
 
@@ -2062,10 +2232,8 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
 
         logger.info(f"Log retrieval for {project}: NFS path = {nfs_path}")
 
-        # Create date-based directory structure: import_logs/{PROJECT}_{DATE}/Logger/{PROJECT}/_/ccenter_ccxml/Ccxml/{hostname}
-        date_based_dir = os.path.join(target_dir, "import_logs", f"{project}_{date}")
+        # Create date-based directory structure
         logger_dir = os.path.join(date_based_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
-
         os.makedirs(logger_dir, exist_ok=True)
 
         # Check if logs have already been retrieved (cache check)
@@ -2258,6 +2426,109 @@ def _run_log_retrieval_job(job_id, project, date, target_dir):
         logger.error(f"Log retrieval job error: {e}")
 
 
+def _launch_dispatch_for_job(job_id: str, project: str, date: str, logs_dir: str):
+    """Launch dispatch when logs are already local (FAST PATH)"""
+    try:
+        from get_users_and_calls import RlogDispatcher
+        RlogDispatcher.reset()
+
+        dispatcher = RlogDispatcher(logs_dir)
+
+        # Find a new port
+        import socket
+        new_port = None
+        for port in range(35000, 35200):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = sock.connect_ex(('127.0.0.1', port))
+                sock.close()
+                if result != 0:
+                    new_port = port
+                    break
+            except:
+                pass
+
+        if new_port:
+            dispatcher.port = new_port
+
+        _log_retrieval_jobs[job_id]["progress"] = f"🚀 Lancement dispatch sur port {dispatcher.port}..."
+
+        logs_path = os.path.join(logs_dir, "Logger")
+        logger.info(f"Local dispatch for {project}: logs_path = {logs_path}")
+
+        if not os.path.exists(logs_path):
+            raise RuntimeError(f"Répertoire Logger local non trouvé: {logs_path}")
+
+        import os as os_mod
+        env = os_mod.environ.copy()
+        env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
+
+        interface_path = os_mod.path.join(os_mod.path.dirname(os_mod.path.abspath(__file__)), "debug_interface.xml")
+        if not os_mod.path.exists(interface_path):
+            interface_path = os_mod.path.join(logs_dir, "debug_interface.xml")
+
+        logger.info(f"Local dispatch for {project}: launching on port {dispatcher.port}")
+
+        cmd = [
+            dispatcher.DISPATCH_BIN,
+            "-slave", str(dispatcher.port),
+            "-logs", logs_path,
+            "-interface", interface_path,
+            "-stderr"
+        ]
+
+        import subprocess as sp
+        import time as time_mod
+
+        dispatcher.process = sp.Popen(
+            cmd,
+            env=env,
+            stdout=sp.DEVNULL,
+            stderr=sp.PIPE,
+            preexec_fn=os_mod.setsid
+        )
+
+        time_mod.sleep(10)
+
+        if dispatcher.process.poll() is not None:
+            stderr = dispatcher.process.stderr.read().decode() if dispatcher.process.stderr else ""
+            raise RuntimeError(f"Dispatch arrêté: {stderr}")
+
+        _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch démarré, chargement des logs pour {date}..."
+        dispatcher._last_activity = time_mod.time()
+
+        day = date.replace("-", "_")
+        logger.info(f"Local dispatch for {project}: loading day {date} into dispatch on port {dispatcher.port}")
+        dispatcher._load_day(day)
+        time_mod.sleep(2)
+
+        # Register the dispatch process
+        register_dispatch(date, dispatcher.port, dispatcher.process, project)
+
+        # Save/update snapshot
+        existing_logs = glob.glob(os.path.join(logs_dir, "**", "log_*.log"), recursive=True)
+        existing_logs_compressed = glob.glob(os.path.join(logs_dir, "**", "log_*.bz2"), recursive=True)
+        files_count = len(existing_logs) + len(existing_logs_compressed)
+        save_log_snapshot(project, date, dispatcher.port, logs_dir, files_count)
+
+        # Update job status
+        _log_retrieval_jobs[job_id]["status"] = "done"
+        _log_retrieval_jobs[job_id]["progress"] = f"✅ Terminé (logs locaux): {files_count} fichiers. Dispatch sur port {dispatcher.port}"
+        _log_retrieval_jobs[job_id]["dispatch_port"] = dispatcher.port
+        _log_retrieval_jobs[job_id]["directory"] = logs_dir
+        _log_retrieval_jobs[job_id]["cached"] = True
+        _log_retrieval_jobs[job_id]["files_source"] = "local"
+
+        logger.info(f"Local dispatch for {project}: completed - {files_count} files, dispatch on port {dispatcher.port}")
+
+    except Exception as e:
+        _log_retrieval_jobs[job_id]["status"] = "error"
+        _log_retrieval_jobs[job_id]["error"] = str(e)
+        _log_retrieval_jobs[job_id]["progress"] = f"❌ Erreur: {str(e)}"
+        logger.error(f"Local dispatch error for {project}: {e}")
+
+
 @app.route("/api/logs/retrieve", methods=["POST"])
 def api_logs_retrieve():
     """Start a background job to retrieve log files from NFS and launch dispatch"""
@@ -2411,6 +2682,7 @@ def api_logs_snapshot_delete(project, date):
 
     snapshot = _log_snapshots.pop(key)
     logger.info(f"Deleted log snapshot: {key}")
+    save_snapshots_to_disk()
 
     return jsonify({
         "success": True,
@@ -2420,12 +2692,16 @@ def api_logs_snapshot_delete(project, date):
 
 @app.route("/api/logs/snapshots/cleanup", methods=["POST"])
 def api_logs_snapshots_cleanup():
-    """Clean up old snapshots (>7 days)"""
-    count = cleanup_old_snapshots(7)
+    """Clean up old snapshots (>2 hours - same as dispatch)"""
+    count = cleanup_old_snapshots(max_age_days=0.083)  # 2 hours = 0.083 days
     return jsonify({
         "success": True,
         "message": f"Cleaned up {count} old snapshots"
     })
+
+
+# Load persistent snapshots at startup
+load_snapshots_from_disk()
 
 
 if __name__ == "__main__":

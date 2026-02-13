@@ -1,0 +1,18 @@
+{
+  "ARTELIA_2026-02-10": {
+    "project": "ARTELIA",
+    "date": "2026-02-10",
+    "port": 35004,
+    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-10",
+    "created_at": 1770931898.647995,
+    "files_count": 24
+  },
+  "ARTELIA_2026-02-12": {
+    "project": "ARTELIA",
+    "date": "2026-02-12",
+    "port": 35003,
+    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-12",
+    "created_at": 1770931770.9669032,
+    "files_count": 22
+  }
+}
