@@ -1,0 +1,13 @@
+[Container]
+Image=localhost/cst_expl:latest
+ContainerName=cst_expl
+Network=host
+Volume=/opt/debug/NFS:/opt/debug/NFS
+Environment=MYSQL_HOST=10.9.8.106
+
+[Service]
+TimeoutStopSec=70
+RestartPolicy=Always
+
+[Install]
+WantedBy=default.target

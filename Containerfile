@@ -14,6 +14,7 @@ RUN dnf -y install --setopt=install_weak_deps=False --nodocs \
         libstdc++ \
         libgcc \
         glibc \
+        cryptopp \
         && \
     dnf -y clean all && \
     rm -rf /var/cache/yum/* \
