@@ -6,3 +6,5 @@ session*.md
 app/
 config.py
 import_logs/*
+web_server.log
+snapshots.json

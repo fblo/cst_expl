@@ -350,7 +350,7 @@ def _start_cleanup_thread():
     def _cleanup_loop():
         while True:
             try:
-                cleanup_stale_dispatches(1800)
+                cleanup_stale_dispatches(7200)  # 2 hours
             except Exception as e:
                 logger.warning(f"Error in dispatch cleanup: {e}")
             time.sleep(60)

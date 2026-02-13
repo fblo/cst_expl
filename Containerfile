@@ -43,21 +43,31 @@ RUN pip3 install --no-cache-dir --root-user-action=ignore \
 # Create app user and directory structure
 RUN useradd -m -s /bin/sh -u 1000 cccp && \
     mkdir -p /app && \
+    mkdir import_logs && \
     chown cccp:cccp /app
 
 # Set working directory
 WORKDIR /app
 
 # Copy application files
-COPY --chown=cccp:cccp ccenter_report web_server.py get_users_and_calls.py config.py ./
+COPY --chown=cccp:cccp ccenter_dispatch ccenter_ccxml ccenter_update ccenter_report web_server.py get_users_and_calls.py config.py debug_interface.xml ./
 COPY --chown=cccp:cccp templates/ ./templates/
 
 # Set permissions
 RUN chmod +x /app/ccenter_report && \
+    chmod +x /app/ccenter_dispatch && \
+    chmod +x /app/ccenter_ccxml && \
+    chmod +x /app/ccenter_update && \
     chown -R cccp:cccp /app
 
 # Switch to non-root user
 USER cccp
+
+# Create directory for NFS mount
+RUN mkdir -p /opt/debug/NFS
+
+# Declare volume for NFS mount
+VOLUME ["/opt/debug/NFS"]
 
 # Environment variables for optimization
 ENV FLASK_HOST=0.0.0.0 \
@@ -72,6 +82,6 @@ ENV FLASK_HOST=0.0.0.0 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONOPTIMIZE=1
 
-EXPOSE 5000
+EXPOSE 500
 
 CMD ["python3", "web_server.py"]
