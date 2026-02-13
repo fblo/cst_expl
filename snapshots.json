@@ -6,5 +6,21 @@
     "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-08",
     "created_at": 1770972299.0241349,
     "files_count": 24
+  },
+  "A6TELECOM_2026-02-13": {
+    "project": "A6TELECOM",
+    "date": "2026-02-13",
+    "port": 35001,
+    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/A6TELECOM_2026-02-13",
+    "created_at": 1770993254.0554864,
+    "files_count": 15
+  },
+  "ARTELIA_2026-02-13": {
+    "project": "ARTELIA",
+    "date": "2026-02-13",
+    "port": 35002,
+    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-13",
+    "created_at": 1770993298.2451482,
+    "files_count": 15
   }
 }
