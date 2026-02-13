@@ -44,6 +44,9 @@ RUN pip3 install --no-cache-dir --root-user-action=ignore \
 RUN mkdir -p /app && \
     mkdir /app/import_logs && \
     mkdir -p /opt/debug/NFS 
+
+# Declare volume for NFS mount
+VOLUME ["/opt/debug/NFS"]
     
 
 # Set working directory
@@ -75,5 +78,6 @@ ENV FLASK_HOST=0.0.0.0 \
     PYTHONOPTIMIZE=1
 
 EXPOSE 5000
+EXPOSE 35000-35200
 
 CMD ["python3", "web_server.py"]
