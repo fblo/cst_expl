@@ -20,9 +20,8 @@ import mysql.connector
 import os
 
 # Import configuration
-from config import MYSQL_CONFIG, FLASK_CONFIG, NFS_CONFIG, LOGGING_CONFIG, SNAPSHOTS_FILE, SSH_CONFIG
+from config import MYSQL_CONFIG, FLASK_CONFIG, NFS_CONFIG, LOGGING_CONFIG, SNAPSHOTS_FILE, SSH_CONFIG, CCC_BIN
 from get_users_and_calls import RlogDispatcher
-import threading
 
 # Setup logging based on configuration
 LOG_LEVEL = getattr(logging, LOGGING_CONFIG.get("level", "INFO").upper())
@@ -207,138 +206,37 @@ class DashboardState:
 # Global state instance
 state = DashboardState()
 
-# Global dictionary to store dispatch ports by date (from retrieve jobs)
-_dispatch_ports_by_date = {}
-
-
-def get_dispatch_port_for_date(date: str) -> Optional[int]:
-    """Get the dispatch port for a specific date, or None if not found"""
-    return _dispatch_ports_by_date.get(date)
-
-
-def set_dispatch_port_for_date(date: str, port: int):
-    """Store the dispatch port for a specific date"""
-    _dispatch_ports_by_date[date] = port
-
-
-# Global dictionary to track dispatch processes with metadata
-_dispatch_info = {}  # port -> {"date": date, "project": str, "created_at": timestamp, "process": process}
-
-
-# Global dictionary to store log retrieval snapshots (project_date -> snapshot)
-_log_snapshots = {}  # key: "PROJECT_YYYY-MM-DD" -> {"project": str, "date": str, "port": int, "directory": str, "created_at": timestamp, "files_count": int}
-
-
-def load_snapshots_from_disk():
-    """Charge les snapshots depuis le fichier JSON au démarrage"""
-    global _log_snapshots
-    if os.path.exists(SNAPSHOTS_FILE):
-        try:
-            with open(SNAPSHOTS_FILE, 'r') as f:
-                _log_snapshots = json.load(f)
-            logger.info(f"Loaded {len(_log_snapshots)} snapshots from disk")
-        except Exception as e:
-            logger.warning(f"Failed to load snapshots: {e}")
-
-
-def save_snapshots_to_disk():
-    """Sauvegarde tous les snapshots dans le fichier JSON"""
-    try:
-        with open(SNAPSHOTS_FILE, 'w') as f:
-            json.dump(_log_snapshots, f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to save snapshots: {e}")
-
-
-def get_log_snapshot(project: str, date: str) -> Optional[dict]:
-    """Get a log snapshot for a specific project and date"""
-    key = f"{project}_{date}"
-    return _log_snapshots.get(key)
-
-
-def save_log_snapshot(project: str, date: str, port: int, directory: str, files_count: int):
-    """Save a log snapshot"""
-    key = f"{project}_{date}"
-    import time as time_mod
-    _log_snapshots[key] = {
-        "project": project,
-        "date": date,
-        "port": port,
-        "directory": directory,
-        "created_at": time_mod.time(),
-        "files_count": files_count
-    }
-    logger.info(f"Saved log snapshot: {key} (port={port}, files={files_count})")
-    save_snapshots_to_disk()
-
-
-def cleanup_old_snapshots(max_age_days: float = 7):
-    """Clean up snapshots older than max_age_days"""
-    import time as time_mod
-    cutoff_time = time_mod.time() - (max_age_days * 24 * 60 * 60)
-    cleaned = 0
-
-    for key, snapshot in list(_log_snapshots.items()):
-        if snapshot.get("created_at", 0) < cutoff_time:
-            del _log_snapshots[key]
-            cleaned += 1
-
-    if cleaned > 0:
-        logger.info(f"Cleaned up {cleaned} old log snapshots")
-        save_snapshots_to_disk()
-
-    return cleaned
-
-
-def cleanup_stale_dispatches(max_age_seconds: float = 7200):
-    """Clean up dispatch processes older than max_age_seconds (default: 2 hours)"""
-    import time as time_mod
-
-    current_time = time_mod.time()
-    stale_ports = []
-
-    for port, info in _dispatch_info.items():
-        age = current_time - info.get("created_at", 0)
-        if age > max_age_seconds:
-            stale_ports.append(port)
-
-    for port in stale_ports:
-        info = _dispatch_info.pop(port, None)
-        if info:
-            process = info.get("process")
-            if process and process.poll() is None:
-                try:
-                    import signal
-                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                    logger.info(f"Cleaned up stale dispatch on port {port}")
-                except Exception as e:
-                    logger.warning(f"Failed to kill stale dispatch on port {port}: {e}")
-
-            # Delete linked snapshot (snapshots have same lifetime as dispatch)
-            snapshot_key = info.get("snapshot_key")
-            if snapshot_key and snapshot_key in _log_snapshots:
-                del _log_snapshots[snapshot_key]
-                save_snapshots_to_disk()
-
-            date = info.get("date")
-            if date and _dispatch_ports_by_date.get(date) == port:
-                del _dispatch_ports_by_date[date]
-
-
-def register_dispatch(date: str, port: int, process, project: str = ""):
-    """Register a new dispatch process"""
-    import time as time_mod
-
-    _dispatch_ports_by_date[date] = port
-    snapshot_key = f"{project}_{date}" if project else None
-    _dispatch_info[port] = {
-        "date": date,
-        "project": project,
-        "created_at": time_mod.time(),
-        "process": process,
-        "snapshot_key": snapshot_key
-    }
-    logger.info(f"Registered dispatch on port {port} for date {date} (project: {project})")
+# Import modules for dispatch, snapshots, and paths management
+from dispatch import (
+    get_dispatch_port_for_date,
+    set_dispatch_port_for_date,
+    register_dispatch,
+    cleanup_stale_dispatches,
+    _dispatch_info,
+    _dispatch_ports_by_date
+)
+from snapshots import (
+    load_snapshots_from_disk,
+    save_snapshots_to_disk,
+    get_log_snapshot,
+    save_log_snapshot,
+    cleanup_old_snapshots,
+    delete_log_snapshot,
+    _log_snapshots
+)
+from paths import (
+    get_nfs_hostnames,
+    get_nfs_projects_for_hostname,
+    get_nfs_log_path,
+    get_local_hostnames_for_project,
+    get_local_log_path,
+    get_hostnames_for_project,
+    get_ssh_remote_path
+)
+from mysql_queries import (
+    get_servers_from_mysql,
+    get_nfs_projects_from_mysql
+)
 
 
 _cleanup_thread = None
@@ -620,7 +518,7 @@ def api_console_session():
 
         # First get object_id for the session
         get_object_cmd = [
-            "/app/ccenter_report",
+            CCC_BIN["report"],
             "-login",
             username,
             "-password",
@@ -665,7 +563,7 @@ def api_console_session():
 
         # Now get events using the object_id
         get_events_cmd = [
-            "/app/ccenter_report",
+            CCC_BIN["report"],
             "-login",
             username,
             "-password",
@@ -894,7 +792,7 @@ def api_rlog_search():
 
         try:
             cmd = [
-                "/app/ccenter_report",
+                CCC_BIN["report"],
                 "-login", "admin",
                 "-password", "admin",
                 "-server", "127.0.0.1",
@@ -1127,7 +1025,7 @@ def api_rlog_sessions():
         time_mod.sleep(2)
 
     cmd = [
-        "/app/ccenter_report",
+        CCC_BIN["report"],
         "-login", "admin",
         "-password", "admin",
         "-server", "127.0.0.1",
@@ -1189,7 +1087,7 @@ def _get_session_caller_called(port: int, object_id: str) -> tuple:
     """Extract caller and called numbers from session events"""
     try:
         cmd = [
-            "/app/ccenter_report",
+            CCC_BIN["report"],
             "-login", "admin",
             "-password", "admin",
             "-server", "127.0.0.1",
@@ -1387,7 +1285,7 @@ def api_rlog_session_detail():
             time_mod.sleep(2)
         
         cmd = [
-            "/app/ccenter_report",
+            CCC_BIN["report"],
             "-login", "admin",
             "-password", "admin",
             "-server", "127.0.0.1",
@@ -1413,7 +1311,7 @@ def api_rlog_session_detail():
             return jsonify({"success": False, "error": f"Session '{session_id}' not found on port {port}"}), 404
         
         cmd = [
-            "/app/ccenter_report",
+            CCC_BIN["report"],
             "-login", "admin",
             "-password", "admin",
             "-server", "127.0.0.1",
@@ -1505,7 +1403,7 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
             
             # Query the existing dispatch
             cmd = [
-                "/app/ccenter_report",
+                CCC_BIN["report"],
                 "-login", "admin",
                 "-password", "admin",
                 "-server", "127.0.0.1",
@@ -1534,7 +1432,7 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
             
             # Query events from existing dispatch
             cmd = [
-                "/app/ccenter_report",
+                CCC_BIN["report"],
                 "-login", "admin",
                 "-password", "admin",
                 "-server", "127.0.0.1",
@@ -1760,126 +1658,16 @@ def api_rlog_job_cancel(job_id: str):
 # NFS LOG RETRIEVAL ENDPOINTS
 # =============================================================================
 
-_log_retrieval_jobs = {}
+# Jobs are now in separate module
+from jobs import _log_retrieval_jobs, run_log_retrieval_job, launch_dispatch_for_job
+
+# _get_nfs_hostnames is now imported from paths module
 
 
-def _get_nfs_hostnames():
-    """List available hostnames (vocal nodes) on the NFS mount"""
-    nfs_dir = NFS_CONFIG["mount_directory"]
-    if not os.path.exists(nfs_dir):
-        return []
-    try:
-        return sorted([
-            d for d in os.listdir(nfs_dir)
-            if os.path.isdir(os.path.join(nfs_dir, d)) and not d.startswith(".")
-        ])
-    except Exception:
-        return []
+# _get_project_hostname_from_mysql is now imported from mysql_queries module
 
 
-def _get_nfs_projects_for_hostname(hostname):
-    """List projects available for a hostname on NFS"""
-    nfs_dir = NFS_CONFIG["mount_directory"]
-    logs_base = os.path.join(nfs_dir, hostname, "opt", "consistent", "logs")
-    if not os.path.exists(logs_base):
-        return []
-    try:
-        return sorted([
-            d for d in os.listdir(logs_base)
-            if os.path.isdir(os.path.join(logs_base, d)) and not d.startswith(".")
-        ])
-    except Exception:
-        return []
-
-
-def _get_nfs_log_path(hostname, project):
-    """Get the full path to logs for a given hostname and project"""
-    nfs_dir = NFS_CONFIG["mount_directory"]
-    
-    # Path structure: {mount}/interact-iv/{hostname}/opt/consistent/logs/{project}/Logger/{project}/_/ccenter_ccxml/Ccxml/{hostname}
-    # Note: We construct up to 'Ccxml' and then look for the hostname submenu
-    ccxml_base = os.path.join(
-        nfs_dir, "interact-iv", hostname, "opt", "consistent", "logs", project,
-        "Logger", project, "_", "ccenter_ccxml", "Ccxml"
-    )
-    
-    if not os.path.exists(ccxml_base):
-        # Try finding without interact-iv prefix (legacy path support)?
-        # For now, stick to user request.
-        return None
-        
-    # Find the actual hostname directory (may have suffix or be exact)
-    try:
-        # Check for exact match first
-        exact_path = os.path.join(ccxml_base, hostname)
-        if os.path.exists(exact_path):
-            return exact_path
-            
-        # Fallback: scan for directory starting with hostname
-        subdirs = [d for d in os.listdir(ccxml_base) if d.startswith(hostname)]
-        if subdirs:
-            return os.path.join(ccxml_base, subdirs[0])
-    except Exception:
-        pass
-        
-    return None
-
-
-def _get_project_hostname_from_mysql(project_name):
-    """Resolve project name to vocal hostname using MySQL.
-    Returns a dict with ps_hostname (for NFS paths) and svc_hostname (from master_vocalnodes).
-    """
-    query = """
-        SELECT
-            v.cccip,
-            g.cst_node,
-            v.hostname AS svc_hostname
-        FROM
-            interactivportal.Global_referential g
-        JOIN
-            interactivportal.Projects p ON g.customer_id = p.id
-        JOIN
-            interactivdbmaster.master_vocalnodes v ON g.cst_node = v.vocalnode
-        WHERE p.name = %s
-    """
-    try:
-        conn = mysql.connector.connect(**MYSQL_CONFIG)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(query, (project_name,))
-        result = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
-        if result:
-            cst_node = result.get("cst_node")
-            svc_hostname = result.get("svc_hostname")
-
-            # Le cst_node peut être un shortcut (ex: "fr529") ou un hostname complet (ex: "ps-ics-prd-cst-fr-530")
-            # Le svc_hostname contient toujours le hostname complet avec svc- (ex: "svc-ics-prd-cst-fr-529")
-            # Pour le NFS, on a besoin du hostname avec ps- (ex: "ps-ics-prd-cst-fr-529")
-
-            if svc_hostname:
-                # Transformer svc- en ps- pour le chemin NFS
-                ps_hostname = svc_hostname.replace("svc-", "ps-", 1)
-            elif cst_node:
-                # Fallback: utiliser cst_node directement
-                ps_hostname = cst_node
-                svc_hostname = None
-            else:
-                return None
-
-            logger.info(f"MySQL for {project_name}: cst_node={cst_node}, svc_hostname={svc_hostname}, ps_hostname={ps_hostname}")
-
-            return {
-                "cst_node": cst_node,
-                "svc_hostname": svc_hostname,
-                "ps_hostname": ps_hostname,
-            }
-
-    except Exception as e:
-        logger.error(f"MySQL error resolving hostname for {project_name}: {e}")
-
-    return None
+# run_log_retrieval_job and _launch_dispatch_for_job are now in jobs module
 
 
 @app.route("/api/logs/projects")
@@ -1907,114 +1695,8 @@ def api_logs_projects():
         return jsonify({"success": False, "error": str(e)})
 
 
-def _get_hostnames_for_project(project):
-    """Find hostnames for a project - checks both NFS and local logs.
-    Returns list of hostnames suitable for NFS path.
-    """
-    # First check local logs
-    local_hostnames = _get_local_hostnames_for_project(project)
-    if local_hostnames:
-        logger.info(f"Local hostnames found for {project}: {local_hostnames}")
-        return local_hostnames
-
-    # Then check NFS via MySQL
-    mysql_result = _get_project_hostname_from_mysql(project)
-
-    if mysql_result:
-        ps_hostname = mysql_result.get("ps_hostname")
-        svc_hostname = mysql_result.get("svc_hostname")
-
-        if ps_hostname:
-            # Verify if path exists on NFS
-            path = _get_nfs_log_path(ps_hostname, project)
-            logger.info(f"MySQL for {project}: ps_hostname={ps_hostname}, svc_hostname={svc_hostname}")
-            logger.info(f"NFS path check: {path} (exists: {os.path.exists(path) if path else False})")
-
-            if path and os.path.exists(path):
-                return [ps_hostname]
-            else:
-                # Try with svc_hostname if ps_hostname doesn't work
-                if svc_hostname and svc_hostname != ps_hostname:
-                    path2 = _get_nfs_log_path(svc_hostname, project)
-                    if path2 and os.path.exists(path2):
-                        logger.info(f"Using svc_hostname {svc_hostname} instead of ps_hostname {ps_hostname}")
-                        return [svc_hostname]
-
-    return []
-
-
-def _get_local_hostnames_for_project(project):
-    """Find hostnames for a project in local import_logs directory"""
-    import glob
-    
-    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
-    
-    hostnames = set()
-    
-    # Look for date-based structure: {PROJECT}_{DATE}/Logger/{PROJECT}/_/ccenter_ccxml/Ccxml/HOSTNAME
-    date_pattern = os.path.join(logs_dir, f"{project}_*", "Logger", project, "_", "ccenter_ccxml", "Ccxml", "*")
-    for path in glob.glob(date_pattern):
-        hostname = os.path.basename(path)
-        if hostname and not hostname.startswith('.') and '_' not in hostname:
-            hostnames.add(hostname)
-    
-    # Also check old structure: Logger/PROJECT/*/ccenter_ccxml/Ccxml/HOSTNAME
-    old_pattern = os.path.join(logs_dir, "Logger", project, "*", "ccenter_ccxml", "Ccxml", "*")
-    for path in glob.glob(old_pattern):
-        hostname = os.path.basename(path)
-        if hostname and not hostname.startswith('.') and '_' not in hostname:
-            hostnames.add(hostname)
-    
-    if hostnames:
-        logger.info(f"Local hostnames found for {project}: {list(hostnames)}")
-    
-    return list(hostnames)
-
-
-def _get_local_log_path(hostname, project):
-    """Get the local log path for a given hostname and project"""
-    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
-    return os.path.join(logs_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
-
-
-def _cleanup_old_directories(max_age_days: int = 2):
-    """Clean up directories older than max_age_days in import_logs"""
-    import time as time_mod
-    import shutil
-
-    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
-
-    if not os.path.exists(logs_dir):
-        return {"cleaned": 0, "errors": 0}
-
-    cutoff_time = time_mod.time() - (max_age_days * 24 * 60 * 60)
-    cleaned_count = 0
-    error_count = 0
-
-    for item in os.listdir(logs_dir):
-        item_path = os.path.join(logs_dir, item)
-
-        if not os.path.isdir(item_path):
-            continue
-
-        # Check if it's a date-based directory (contains _YYYY-MM-DD pattern)
-        if "_20" not in item:
-            continue
-
-        try:
-            mtime = os.path.getmtime(item_path)
-            if mtime < cutoff_time:
-                shutil.rmtree(item_path)
-                logger.info(f"Cleaned up old directory: {item_path}")
-                cleaned_count += 1
-        except Exception as e:
-            logger.warning(f"Failed to clean up {item_path}: {e}")
-            error_count += 1
-
-    if cleaned_count > 0:
-        logger.info(f"Cleanup: removed {cleaned_count} old directories")
-
-    return {"cleaned": cleaned_count, "errors": error_count}
+# _get_hostnames_for_project, _get_local_hostnames_for_project, _get_local_log_path
+# are now imported from paths module
 
 
 def _cleanup_old_logger_structure():
@@ -2034,499 +1716,9 @@ def _cleanup_old_logger_structure():
             return False
     return False
 
+# _cleanup_old_directories, _cleanup_old_logger_structure are now in jobs module
 
-def _cleanup_stale_dispatches(max_age_seconds: float = 86400):  # 24h
-    """Clean up dispatch processes older than max_age_seconds"""
-    import time as time_mod
-    import signal
-
-    current_time = time_mod.time()
-    cleaned_count = 0
-
-    for port, info in list(_dispatch_info.items()):
-        created_at = info.get("created_at", 0)
-        age = current_time - created_at
-
-        if age > max_age_seconds:
-            process = info.get("process")
-            date = info.get("date")
-
-            if process and process.poll() is None:
-                try:
-                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                    logger.info(f"Killed stale dispatch on port {port} (age: {age:.0f}s, date: {date})")
-                except Exception as e:
-                    logger.warning(f"Failed to kill dispatch on port {port}: {e}")
-
-            # Remove from tracking
-            if port in _dispatch_info:
-                del _dispatch_info[port]
-
-            if date and _dispatch_ports_by_date.get(date) == port:
-                del _dispatch_ports_by_date[date]
-
-            cleaned_count += 1
-
-    return cleaned_count
-
-
-def _run_log_retrieval_job(job_id, project, date, target_dir):
-    """Background job: copy log files from NFS or SSH to local directory, then launch dispatch"""
-    import time as time_mod
-    
-    try:
-        _log_retrieval_jobs[job_id]["status"] = "running"
-
-        # Check if date is today
-        today_str = time_mod.strftime("%Y-%m-%d")
-        is_today = (date == today_str)
-        
-        logger.info(f"Log retrieval for {project}: date={date}, is_today={is_today}")
-
-        # Check if we have an existing snapshot for this project/date
-        existing_snapshot = get_log_snapshot(project, date)
-
-        if existing_snapshot:
-            snapshot_port = existing_snapshot.get("port")
-            snapshot_dir = existing_snapshot.get("directory")
-            snapshot_files_count = existing_snapshot.get("files_count", 0)
-
-            # Check if dispatch is still running on that port
-            if snapshot_port and snapshot_port in _dispatch_info:
-                info = _dispatch_info.get(snapshot_port, {})
-                process = info.get("process")
-                if process and process.poll() is None:
-                    # Use existing dispatch - ULTRA FAST!
-                    _log_retrieval_jobs[job_id]["progress"] = f"✅ Snapshot: dispatch actif sur port {snapshot_port}"
-                    _log_retrieval_jobs[job_id]["cached"] = True
-                    _log_retrieval_jobs[job_id]["dispatch_port"] = snapshot_port
-                    _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
-                    _log_retrieval_jobs[job_id]["status"] = "done"
-                    _log_retrieval_jobs[job_id]["copied"] = snapshot_files_count
-                    _log_retrieval_jobs[job_id]["snapshot_used"] = True
-
-                    if date not in _dispatch_ports_by_date:
-                        _dispatch_ports_by_date[date] = snapshot_port
-
-                    logger.info(f"Log retrieval for {project}: using existing dispatch on port {snapshot_port}")
-                    return
-
-            # Snapshot exists but dispatch not running - check if logs are local (FAST PATH)
-            if os.path.exists(snapshot_dir):
-                existing_logs = glob.glob(os.path.join(snapshot_dir, "**", "log_*.log"), recursive=True)
-                existing_logs_compressed = glob.glob(os.path.join(snapshot_dir, "**", "log_*.bz2"), recursive=True)
-
-                if existing_logs or existing_logs_compressed:
-                    # Logs are local! Skip NFS, just launch new dispatch
-                    _log_retrieval_jobs[job_id]["progress"] = "📁 Logs locaux détectés, lancement dispatch..."
-                    _log_retrieval_jobs[job_id]["cached"] = True
-                    _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
-                    _log_retrieval_jobs[job_id]["files_source"] = "local"
-
-                    logger.info(f"Log retrieval for {project}: snapshot found but dispatch dead, logs are local at {snapshot_dir}")
-
-                    # Find a new port and launch dispatch
-                    _cleanup_stale_dispatches(7200)
-                    _launch_dispatch_for_job(job_id, project, date, snapshot_dir)
-                    return
-
-            # Snapshot exists but no local logs - proceed with normal retrieval
-            logger.info(f"Log retrieval for {project}: snapshot exists but no local logs, checking NFS...")
-
-        # No snapshot or no local logs - proceed with normal retrieval
-        # Cleanup stale dispatches
-        _cleanup_stale_dispatches(7200)  # 2 hours max age for dispatches
-
-        # Get hostnames from MySQL database
-        _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des hostnames pour {project} dans MySQL..."
-        valid_hostnames = _get_hostnames_for_project(project)
-
-        if not valid_hostnames:
-            _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"ERREUR, NFS vers ccc_logs non monté ! ({NFS_CONFIG['mount_directory']})"
-            return
-
-        hostname = valid_hostnames[0]
-        logger.info(f"Log retrieval for {project}: using hostname {hostname}")
-
-        # Create date-based directory structure: import_logs/{PROJECT}_{DATE}/Logger/{PROJECT}/_/ccenter_ccxml/Ccxml/{hostname}
-        date_based_dir = os.path.join(target_dir, "import_logs", f"{project}_{date}")
-        
-        if is_today:
-            # Today's logs: use SSH/SCP from remote server
-            _log_retrieval_jobs[job_id]["progress"] = "🔍 Récupération des logs du jour via SSH..."
-            
-            # Create local directory structure matching the exact dispatch structure
-            logger_dir = os.path.join(date_based_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
-            os.makedirs(logger_dir, exist_ok=True)
-            logger.info(f"Log retrieval for {project}: local dir = {logger_dir}")
-            
-            # Remote path: /opt/consistent/logs/ARTELIA/Logger/ARTELIA/_/ccenter_ccxml/Ccxml/ps-ics-prd-cst-fr-529/log_2026_02_12*
-            date_pattern = date.replace('-', '_')
-            remote_dir = os.path.join(SSH_CONFIG["remote_base_path"], project, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
-            remote_pattern = f"log_{date_pattern}_*.log"
-            logger.info(f"Log retrieval for {project}: SSH remote = {hostname}:{remote_dir}/{remote_pattern}")
-            
-            _log_retrieval_jobs[job_id]["progress"] = f"📥 SCP: copie des logs {date} depuis {hostname}..."
-            
-            # Use sshpass + scp with legacy SSH options for old CST servers
-            sshpass_cmd = [
-                "sshpass", "-p", SSH_CONFIG["password"],
-                "scp", "-o", "StrictHostKeyChecking=no",
-                "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
-                "-o", "HostKeyAlgorithms=+ssh-rsa",
-                "-o", "KexAlgorithms=+diffie-hellman-group1-sha1",
-                f"{SSH_CONFIG['user']}@{hostname}:{remote_dir}/{remote_pattern}",
-                logger_dir + "/"
-            ]
-            
-            logger.info(f"Log retrieval for {project}: running sshpass scp command")
-            scp_result = subprocess.run(
-                sshpass_cmd,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 min timeout
-            )
-            
-            if scp_result.returncode != 0:
-                logger.warning(f"Log retrieval for {project}: scp stderr: {scp_result.stderr}")
-                if "sshpass" in scp_result.stderr or "not found" in scp_result.stderr.lower():
-                    _log_retrieval_jobs[job_id]["error"] = "ERREUR: sshpass non installé (requis pour SCP)"
-                    _log_retrieval_jobs[job_id]["status"] = "error"
-                    return
-            
-            # Count copied files
-            copied_logs = glob.glob(os.path.join(logger_dir, "log_*.log"))
-            copied = len(copied_logs)
-            logger.info(f"Log retrieval for {project}: copied {copied} files via SCP")
-            
-            if copied == 0:
-                _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier log_{date_pattern}_*.log trouvé sur {hostname}"
-                _log_retrieval_jobs[job_id]["status"] = "error"
-                return
-            
-            _log_retrieval_jobs[job_id]["progress"] = f"✅ {copied} fichiers copiés via SSH"
-            _log_retrieval_jobs[job_id]["copied"] = copied
-            _log_retrieval_jobs[job_id]["files_source"] = "ssh"
-            
-            # Launch dispatch with local logs
-            _log_retrieval_jobs[job_id]["progress"] = "🚀 Lancement du dispatch..."
-            _cleanup_stale_dispatches(7200)
-            _launch_dispatch_for_job(job_id, project, date, date_based_dir)
-            return
-        
-        # Not today: use NFS as before
-        # Get NFS path from configuration
-        nfs_path = _get_nfs_log_path(hostname, project)
-
-        if not nfs_path:
-            _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"Chemin NFS non configuré pour {hostname}"
-            return
-
-        # Check if NFS path exists
-        if not os.path.exists(nfs_path):
-            _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"Répertoire NFS introuvable: {nfs_path}"
-            return
-
-        logger.info(f"Log retrieval for {project}: NFS path = {nfs_path}")
-
-        # Create date-based directory structure
-        logger_dir = os.path.join(date_based_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
-        os.makedirs(logger_dir, exist_ok=True)
-
-        # Check if logs have already been retrieved (cache check)
-        existing_logs = glob.glob(os.path.join(logger_dir, "log_*.log"))
-        existing_logs_compressed = glob.glob(os.path.join(logger_dir, "log_*.bz2"))
-        logs_already_exist = len(existing_logs) > 0 or len(existing_logs_compressed) > 0
-
-        copied = 0
-        decompressed = 0
-        errors = []
-        is_cached = False
-        total_files = 0
-
-        if logs_already_exist:
-            # Use cached logs
-            total_files = len(existing_logs) + len(existing_logs_compressed)
-            _log_retrieval_jobs[job_id]["progress"] = f"✅ Logs déjà récupérés ({total_files} fichiers existants)"
-            _log_retrieval_jobs[job_id]["copied"] = total_files
-            _log_retrieval_jobs[job_id]["decompressed"] = len(existing_logs)
-            _log_retrieval_jobs[job_id]["cached"] = True
-            is_cached = True
-            logger.info(f"Log retrieval for {project}: using cached logs ({total_files} files)")
-        else:
-            # Find files for the date on NFS
-            date_pattern = date.replace('-', '_')
-            pattern = os.path.join(nfs_path, f"log_{date_pattern}*")
-            _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des logs pour la date {date}..."
-            files_to_copy = glob.glob(pattern)
-
-            if not files_to_copy:
-                _log_retrieval_jobs[job_id]["status"] = "error"
-                _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier log_{date_pattern}* trouvé dans {nfs_path}"
-                return
-
-            total_files = len(files_to_copy)
-            _log_retrieval_jobs[job_id]["total_files"] = total_files
-            _log_retrieval_jobs[job_id]["progress"] = f"📥 {total_files} fichiers log_{date_pattern}* trouvés sur NFS"
-
-            for f in files_to_copy:
-                try:
-                    basename = os.path.basename(f)
-                    dest = os.path.join(logger_dir, basename)
-
-                    _log_retrieval_jobs[job_id]["progress"] = f"📥 Copie {basename}... ({copied + 1}/{total_files})"
-                    shutil.copy2(f, dest)
-                    copied += 1
-
-                    if dest.endswith(".bz2"):
-                        _log_retrieval_jobs[job_id]["progress"] = f"🗜️ Décompression {basename}... ({copied}/{total_files})"
-                        decompressed_path = dest[:-4]
-                        try:
-                            with bz2.open(dest, 'rb') as bz_file:
-                                with open(decompressed_path, 'wb') as out_file:
-                                    shutil.copyfileobj(bz_file, out_file)
-                            os.remove(dest)
-                            decompressed += 1
-                            logger.info(f"Log retrieval for {project}: decompressed {basename}")
-                        except Exception as bz_err:
-                            errors.append(f"Décompression {basename}: {bz_err}")
-                            logger.warning(f"Log retrieval for {project}: failed to decompress {basename}: {bz_err}")
-
-                    _log_retrieval_jobs[job_id]["copied"] = copied
-                    _log_retrieval_jobs[job_id]["progress"] = f"📥 {copied}/{total_files} fichiers copiés vers {date_based_dir}/Logger/"
-
-                except Exception as e:
-                    errors.append(f"Copie {os.path.basename(f)}: {str(e)}")
-                    logger.error(f"Log retrieval for {project}: failed to copy {os.path.basename(f)}: {e}")
-
-            _log_retrieval_jobs[job_id]["cached"] = False
-            _log_retrieval_jobs[job_id]["decompressed"] = decompressed
-            _log_retrieval_jobs[job_id]["errors"] = errors
-
-        # Launch dispatch
-        _log_retrieval_jobs[job_id]["progress"] = "🚀 Lancement du dispatch..."
-        _log_retrieval_jobs[job_id]["dispatch_launched"] = True
-
-        try:
-            from get_users_and_calls import RlogDispatcher
-            RlogDispatcher.reset()
-
-            dispatcher = RlogDispatcher(date_based_dir)
-
-            # Find a new port
-            import socket
-            new_port = None
-            for port in range(35000, 35200):
-                try:
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(1)
-                    result = sock.connect_ex(('127.0.0.1', port))
-                    sock.close()
-                    if result != 0:
-                        new_port = port
-                        break
-                except:
-                    pass
-
-            if new_port:
-                dispatcher.port = new_port
-
-            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Lancement du dispatch pour {project} sur port {dispatcher.port}..."
-            dispatcher.create_logger_structure(project, hostname)
-
-            logs_path = os.path.join(date_based_dir, "Logger")
-            logger.info(f"Log retrieval for {project}: dispatch logs_path = {logs_path}")
-            logger.info(f"Log retrieval for {project}: date_based_dir = {date_based_dir}")
-
-            if not os.path.exists(logs_path):
-                raise RuntimeError(f"Répertoire Logger non trouvé: {logs_path}")
-
-            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch sur port {dispatcher.port}, logs: {logs_path}/"
-
-            import os as os_mod
-            env = os_mod.environ.copy()
-            env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
-
-            interface_path = os_mod.path.join(os_mod.path.dirname(os_mod.path.abspath(__file__)), "debug_interface.xml")
-            if not os_mod.path.exists(interface_path):
-                interface_path = os_mod.path.join(date_based_dir, "debug_interface.xml")
-
-            logger.info(f"Log retrieval for {project}: launching dispatch on port {dispatcher.port}")
-
-            cmd = [
-                dispatcher.DISPATCH_BIN,
-                "-slave", str(dispatcher.port),
-                "-logs", logs_path,
-                "-interface", interface_path,
-                "-stderr"
-            ]
-
-            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch en cours de démarrage sur le port {dispatcher.port}..."
-
-            import subprocess as sp
-            dispatcher.process = sp.Popen(
-                cmd,
-                env=env,
-                stdout=sp.DEVNULL,
-                stderr=sp.PIPE,
-                preexec_fn=os_mod.setsid
-            )
-
-            import time as time_mod
-            time_mod.sleep(10)
-
-            if dispatcher.process.poll() is not None:
-                stderr = dispatcher.process.stderr.read().decode() if dispatcher.process.stderr else ""
-                logger.error(f"Log retrieval for {project}: dispatch failed to start: {stderr}")
-                raise RuntimeError(f"Dispatch arrêté: {stderr}")
-
-            _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch démarré, chargement des logs pour {date}..."
-            dispatcher._last_activity = time_mod.time()
-            port = dispatcher.port
-
-            day = date.replace("-", "_")
-            logger.info(f"Log retrieval for {project}: loading day {date} into dispatch on port {port}")
-            dispatcher._load_day(day)
-            time_mod.sleep(2)
-
-            # Register the dispatch process
-            register_dispatch(date, port, dispatcher.process, project)
-
-            # Save snapshot for future use
-            files_count = total_files if is_cached else copied
-            save_log_snapshot(project, date, port, date_based_dir, files_count)
-
-            if is_cached:
-                _log_retrieval_jobs[job_id]["status"] = "done"
-                _log_retrieval_jobs[job_id]["progress"] = f"✅ Terminé (cache): {total_files} fichiers. Dispatch sur port {port}"
-            else:
-                _log_retrieval_jobs[job_id]["status"] = "done"
-                _log_retrieval_jobs[job_id]["progress"] = f"✅ Terminé: {copied} fichiers copiés, {decompressed} décompressés. Dispatch sur port {port}"
-
-            _log_retrieval_jobs[job_id]["dispatch_port"] = port
-            _log_retrieval_jobs[job_id]["directory"] = date_based_dir
-
-            cache_msg = " (cache)" if is_cached else ""
-            logger.info(f"Log retrieval for {project}: completed successfully{cache_msg} - {total_files} files, dispatch on port {port}")
-
-        except Exception as dispatch_err:
-            _log_retrieval_jobs[job_id]["status"] = "done_with_errors"
-            _log_retrieval_jobs[job_id]["progress"] = f"⚠️ Terminé avec erreurs: {total_files} fichiers. Erreur dispatch: {dispatch_err}"
-            _log_retrieval_jobs[job_id]["dispatch_error"] = str(dispatch_err)
-            logger.error(f"Log retrieval for {project}: dispatch error: {dispatch_err}")
-
-        _log_retrieval_jobs[job_id]["errors"] = errors
-
-    except Exception as e:
-        _log_retrieval_jobs[job_id]["status"] = "error"
-        _log_retrieval_jobs[job_id]["error"] = str(e)
-        logger.error(f"Log retrieval job error: {e}")
-
-
-def _launch_dispatch_for_job(job_id: str, project: str, date: str, logs_dir: str):
-    """Launch dispatch when logs are already local (FAST PATH)"""
-    try:
-        from get_users_and_calls import RlogDispatcher
-        RlogDispatcher.reset()
-
-        dispatcher = RlogDispatcher(logs_dir)
-
-        # Find a new port
-        import socket
-        new_port = None
-        for port in range(35000, 35200):
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1)
-                result = sock.connect_ex(('127.0.0.1', port))
-                sock.close()
-                if result != 0:
-                    new_port = port
-                    break
-            except:
-                pass
-
-        if new_port:
-            dispatcher.port = new_port
-
-        _log_retrieval_jobs[job_id]["progress"] = f"🚀 Lancement dispatch sur port {dispatcher.port}..."
-
-        logs_path = os.path.join(logs_dir, "Logger")
-        logger.info(f"Local dispatch for {project}: logs_path = {logs_path}")
-
-        if not os.path.exists(logs_path):
-            raise RuntimeError(f"Répertoire Logger local non trouvé: {logs_path}")
-
-        import os as os_mod
-        env = os_mod.environ.copy()
-        env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
-
-        interface_path = os_mod.path.join(os_mod.path.dirname(os_mod.path.abspath(__file__)), "debug_interface.xml")
-        if not os_mod.path.exists(interface_path):
-            interface_path = os_mod.path.join(logs_dir, "debug_interface.xml")
-
-        logger.info(f"Local dispatch for {project}: launching on port {dispatcher.port}")
-
-        cmd = [
-            dispatcher.DISPATCH_BIN,
-            "-slave", str(dispatcher.port),
-            "-logs", logs_path,
-            "-interface", interface_path,
-            "-stderr"
-        ]
-
-        import subprocess as sp
-        import time as time_mod
-
-        dispatcher.process = sp.Popen(
-            cmd,
-            env=env,
-            stdout=sp.DEVNULL,
-            stderr=sp.PIPE,
-            preexec_fn=os_mod.setsid
-        )
-
-        time_mod.sleep(10)
-
-        if dispatcher.process.poll() is not None:
-            stderr = dispatcher.process.stderr.read().decode() if dispatcher.process.stderr else ""
-            raise RuntimeError(f"Dispatch arrêté: {stderr}")
-
-        _log_retrieval_jobs[job_id]["progress"] = f"🚀 Dispatch démarré, chargement des logs pour {date}..."
-        dispatcher._last_activity = time_mod.time()
-
-        day = date.replace("-", "_")
-        logger.info(f"Local dispatch for {project}: loading day {date} into dispatch on port {dispatcher.port}")
-        dispatcher._load_day(day)
-        time_mod.sleep(2)
-
-        # Register the dispatch process
-        register_dispatch(date, dispatcher.port, dispatcher.process, project)
-
-        # Save/update snapshot
-        existing_logs = glob.glob(os.path.join(logs_dir, "**", "log_*.log"), recursive=True)
-        existing_logs_compressed = glob.glob(os.path.join(logs_dir, "**", "log_*.bz2"), recursive=True)
-        files_count = len(existing_logs) + len(existing_logs_compressed)
-        save_log_snapshot(project, date, dispatcher.port, logs_dir, files_count)
-
-        # Update job status
-        _log_retrieval_jobs[job_id]["status"] = "done"
-        _log_retrieval_jobs[job_id]["progress"] = f"✅ Terminé (logs locaux): {files_count} fichiers. Dispatch sur port {dispatcher.port}"
-        _log_retrieval_jobs[job_id]["dispatch_port"] = dispatcher.port
-        _log_retrieval_jobs[job_id]["directory"] = logs_dir
-        _log_retrieval_jobs[job_id]["cached"] = True
-        _log_retrieval_jobs[job_id]["files_source"] = "local"
-
-        logger.info(f"Local dispatch for {project}: completed - {files_count} files, dispatch on port {dispatcher.port}")
-
-    except Exception as e:
-        _log_retrieval_jobs[job_id]["status"] = "error"
-        _log_retrieval_jobs[job_id]["error"] = str(e)
-        _log_retrieval_jobs[job_id]["progress"] = f"❌ Erreur: {str(e)}"
-        logger.error(f"Local dispatch error for {project}: {e}")
+# run_log_retrieval_job and _launch_dispatch_for_job are now in jobs module
 
 
 @app.route("/api/logs/retrieve", methods=["POST"])
@@ -2554,7 +1746,7 @@ def api_logs_retrieve():
         "error": None
     }
     
-    _job_executor.submit(_run_log_retrieval_job, job_id, project, date, target_dir)
+    _job_executor.submit(run_log_retrieval_job, job_id, project, date, target_dir)
     
     return jsonify({
         "success": True,

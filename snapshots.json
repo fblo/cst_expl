@@ -2,25 +2,33 @@
   "ARTELIA_2026-02-08": {
     "project": "ARTELIA",
     "date": "2026-02-08",
-    "port": 35000,
+    "port": 35006,
     "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-08",
-    "created_at": 1770972299.0241349,
+    "created_at": 1771017673.7623188,
     "files_count": 24
   },
   "A6TELECOM_2026-02-13": {
     "project": "A6TELECOM",
     "date": "2026-02-13",
-    "port": 35001,
+    "port": 35005,
     "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/A6TELECOM_2026-02-13",
-    "created_at": 1770993254.0554864,
+    "created_at": 1771017601.0458074,
     "files_count": 15
   },
   "ARTELIA_2026-02-13": {
     "project": "ARTELIA",
     "date": "2026-02-13",
-    "port": 35002,
+    "port": 35004,
     "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-13",
-    "created_at": 1770993298.2451482,
+    "created_at": 1771017051.6083236,
     "files_count": 15
+  },
+  "ARTELIA_2026-02-12": {
+    "project": "ARTELIA",
+    "date": "2026-02-12",
+    "port": 35007,
+    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-12",
+    "created_at": 1771017707.3248997,
+    "files_count": 22
   }
 }

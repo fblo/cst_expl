@@ -18,6 +18,8 @@ import signal
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+from config import CCC_BIN
+
 DEFAULT_IP = ""  # Default IP is now empty to allow initialization without server
 DEFAULT_DISPATCH_PORT = 20103
 
@@ -117,7 +119,7 @@ def get_user_real_names(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     try:
         result = subprocess.run(
             [
-                "/app/ccenter_report",
+                CCC_BIN["report"],
                 "-login",
                 "admin",
                 "-password",
@@ -232,7 +234,7 @@ def get_ccxml_sessions(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
         return [], []
         
     cmd = [
-        "/app/ccenter_report",
+        CCC_BIN["report"],
         "-login",
         "supervisor_stho",
         "-password",
@@ -319,7 +321,7 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
         return {}
         
     cmd = [
-        "/app/ccenter_report",
+        CCC_BIN["report"],
         "-login",
         "supervisor_stho",
         "-password",
@@ -511,7 +513,7 @@ def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DEFAULT_DISPAT
         return []
         
     queues_cmd = [
-        "/app/ccenter_report",
+        CCC_BIN["report"],
         "-login",
         "admin",
         "-password",
@@ -611,8 +613,8 @@ def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DEFAULT_DISPAT
 class RlogDispatcher:
     """Gère un dispatch local pour charger et interroger des logs RLOG"""
     
-    DISPATCH_BIN = "/app/ccenter_dispatch"
-    UPDATE_BIN = "/app/ccenter_update"
+    DISPATCH_BIN = CCC_BIN["dispatch"]
+    UPDATE_BIN = CCC_BIN["update"]
     BASE_PORT = 35000
     PORT_RANGE = 200
     
@@ -839,7 +841,7 @@ class RlogDispatcher:
             self._loaded_days.add(day)
         
         cmd = [
-            "/app/ccenter_report",
+            CCC_BIN["report"],
             "-login", kwargs.get("login", "admin"),
             "-password", kwargs.get("password", "admin"),
             "-server", "127.0.0.1",
