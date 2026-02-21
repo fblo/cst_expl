@@ -139,6 +139,56 @@
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
 
+        .logs-search-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 280px;
+            margin-right: 20px;
+        }
+
+        .logs-search-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .logs-search-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .logs-search-form .form-group {
+            margin-bottom: 0;
+        }
+
+        .logs-search-form label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .logs-search-form input[type="date"] {
+            padding: 8px 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .logs-search-buttons {
+            display: flex;
+            gap: 4px;
+        }
+
+        .logs-search-buttons button {
+            padding: 8px 12px;
+            white-space: nowrap;
+        }
+
         .card-title {
             font-size: 14px;
             font-weight: 600;
@@ -654,7 +704,7 @@
         </div>
         <div class="stat-item">
             <span class="stat-value" id="stat-history">0</span>
-            <span class="stat-label">Historical Calls</span>
+            <span class="stat-label">Calls</span>
         </div>
         <div class="stat-item" style="margin-left: auto; text-align: right;">
             <span class="stat-value" id="stat-last-update" style="font-size: 14px;">--:--:--</span>
@@ -779,70 +829,90 @@
 
         <!-- Logs Explorer Tab -->
         <div id="logs-tab" class="tab-content">
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">📁 Logs Explorer</span>
-                    <div style="display: flex; gap: 12px; align-items: center; flex: 1; justify-content: flex-end;">
-                        <div class="global-search" style="display: flex; gap: 8px;">
-                            <input type="text" id="logsGlobalSearch" placeholder="🔍 Numéro, projet, date..."
-                                style="padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 220px;"
-                                onkeypress="if(event.key==='Enter') performLogsGlobalSearch()">
-                            <button class="btn btn-secondary" onclick="performLogsGlobalSearch()" style="padding: 6px 12px;">Rechercher</button>
-                            <button class="btn" onclick="clearLogsGlobalSearch()" id="logsClearSearchBtn" style="padding: 6px 12px; display: none;">✕</button>
-                        </div>
+            <div style="display: flex; gap: 20px;">
+                <!-- Logs Card on left -->
+                <div id="logs-card" class="card" style="width:300px;">
+                    <div class="card-header">
+                        <span class="card-title">📁 Retreive Logs</span>
                     </div>
-                </div>
-                <div class="card-body" style="padding: 16px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Project</label>
-                            <select id="logs-project" 
-                                style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px;">
-                                <option value="">Select project...</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Date</label>
-                            <div style="display: flex; gap: 4px;">
-                                <button class="btn btn-secondary" onclick="setYesterdayDate()" style="padding: 8px 12px; white-space: nowrap;" title="Yesterday">Yesterday</button>
-                                <button class="btn btn-secondary" onclick="setTodayDate()" style="padding: 8px 12px; white-space: nowrap;" title="Today">Today</button>
-                                <input type="date" id="logs-date" 
-                                    style="flex: 1; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px;">
+                    <div class="card-body" style="padding: 16px;">
+                        <div style="display: flex; gap: 20px;">
+                            <!-- Search controls on left, decalled and smaller -->
+                            <div class="logs-search-container">
+                                <div class="logs-search-form">
+                                    <div class="form-group">
+                                        <label>Project</label>
+                                        <select id="logs-project"
+                                            style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px;">
+                                            <option value="">Select project...</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Date</label>
+                                        <div class="logs-search-buttons">
+                                            <button class="btn btn-secondary" onclick="setYesterdayDate()" style="padding: 8px 12px; white-space: nowrap;" title="Yesterday">Yesterday</button>
+                                            <button class="btn btn-secondary" onclick="setTodayDate()" style="padding: 8px 12px; white-space: nowrap;" title="Today">Today</button>
+                                        </div>
+                                        <input type="date" id="logs-date"
+                                            style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px; margin-top: 4px;">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="retrieveLogs()" id="btn-retrieve" style="width:100%; white-space: nowrap;">
+                                        📥 Retrieve & Load
+                                    </button>
+                                </div>
+                            <!-- </div> -->
+
+                            <!-- Progress Display -->
+                            <!-- <div style="flex: 1; min-width: 300px;"> -->
+                                <div id="progress-container" style="margin-top: 16px; display: none;">
+                                    <div id="progress-status" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;"></div>
+                                    <div style="background: var(--bg-tertiary); border-radius: 4px; height: 6px; overflow: hidden;">
+                                        <div id="progress-bar" style="background: var(--accent-color); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Completion Status -->
+                                <div id="completion-status" style="margin-top: 16px; font-size: 12px; display: none;"></div>
+
+                                <!-- Snapshots Buttons -->
+                                <div id="snapshots-container" style="margin-top: 16px;">
+                                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Snapshots disponibles:</div>
+                                    <div id="snapshots-buttons" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                                </div>
                             </div>
                         </div>
-                        <button class="btn btn-primary" onclick="retrieveLogs()" id="btn-retrieve" style="white-space: nowrap;">
-                            📥 Retrieve & Load
-                        </button>
                     </div>
+                </div>
 
-                    <!-- Progress Display -->
-                    <div id="progress-container" style="margin-top: 16px; display: none;">
-                        <div id="progress-status" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;"></div>
-                        <div style="background: var(--bg-tertiary); border-radius: 4px; height: 6px; overflow: hidden;">
-                            <div id="progress-bar" style="background: var(--accent-color); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                <!-- Calls Table on right -->
+                <div id="calls-table-container" class="card" style="flex: 1; min-width: 600px;">
+                    <div class="card-header">
+                        <span class="card-title">📞 Calls</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="logs-calls-search" placeholder="Search..."
+                                style="padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); font-size: 12px; width: 150px;"
+                                onkeyup="filterLogsCalls()">
+                            <button class="btn btn-secondary" onclick="loadLogsCalls()">Refresh</button>
                         </div>
                     </div>
-
-                    <!-- Completion Status -->
-                    <div id="completion-status" style="margin-top: 16px; font-size: 12px; display: none;"></div>
-
-                    <!-- Snapshots Buttons -->
-                    <div id="snapshots-container" style="margin-top: 16px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Snapshots disponibles:</div>
-                        <div id="snapshots-buttons" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sessions List -->
-            <div class="card" style="margin-top: 16px;">
-                <div class="card-header">
-                    <span class="card-title">📞 Call Sessions</span>
-                    <span id="sessions-count" style="font-size: 12px; color: var(--text-muted);">0 sessions</span>
-                </div>
-                <div class="card-body" style="padding: 0;">
-                    <div id="logs-sessions-list" style="max-height: 400px; overflow-y: auto;">
-                        <div class="empty-state" style="padding: 40px;">Select a project and date, then click "Retrieve & Load"</div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Start</th>
+                                    <th>Caller</th>
+                                    <th>Called</th>
+                                    <th>Session</th>
+                                    <th>Project</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-calls-container">
+                                <tr>
+                                    <td colspan="6" class="empty-state">Select a project and date, then click "Retrieve & Load"</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -899,6 +969,8 @@
                     loadHistory();
                 } else if (tab.dataset.tab === 'logs') {
                     loadLogsExplorer();
+                    // Refresh snapshots list when logs tab is clicked
+                    loadSnapshotsButtons();
                 } else if (tab.dataset.tab === 'connect') {
                     loadServers();
                 }
@@ -1887,20 +1959,26 @@
 
         async function loadSessions() {
             const date = document.getElementById('logs-date').value;
-            const container = document.getElementById('logs-sessions-list');
-            const countEl = document.getElementById('sessions-count');
-            
+
             if (!date) {
-                container.innerHTML = '<div class="empty-state">Select a date first</div>';
+                // Mettre à jour la table Calls avec un message vide
+                const callsContainer = document.getElementById('logs-calls-container');
+                if (callsContainer) {
+                    callsContainer.innerHTML = '<tr><td colspan="6" class="empty-state">Select a date first</td></tr>';
+                }
                 return;
             }
-            
-            container.innerHTML = '<div class="empty-state">⏳ Chargement des sessions...</div>';
-            
+
+            // Mettre à jour la table Calls avec un message de chargement
+            const callsContainer = document.getElementById('logs-calls-container');
+            if (callsContainer) {
+                callsContainer.innerHTML = '<tr><td colspan="6" class="empty-state">⏳ Loading calls...</td></tr>';
+            }
+
             try {
                 const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
                 const data = await response.json();
-                
+
                 if (data.success) {
                     const sessions = data.sessions || {};
                     const sessionList = Object.values(sessions);
@@ -1909,34 +1987,211 @@
                     window.logsSessions = sessions;
                     window.logsLocalSessions = sessions;
 
-                    countEl.textContent = sessionList.length + ' sessions';
-
                     if (sessionList.length === 0) {
-                        container.innerHTML = '<div class="empty-state">Aucune session trouvée pour cette date</div>';
+                        if (callsContainer) {
+                            callsContainer.innerHTML = '<tr><td colspan="6" class="empty-state">No calls found for this date</td></tr>';
+                        }
                         return;
                     }
 
-                    container.innerHTML = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px;">' +
-                        sessionList.map(session => {
-                            const createDate = session.create_date || '-';
-                            return `<div style="padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')" title="Click to view session details">
-                                <div style="color: var(--purple-color); font-weight: 600; font-size: 11px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    ${escapeHtml(session.id)}
-                                </div>
-                                <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">${escapeHtml(createDate)}</div>
-                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 10px;">
-                                    <div><span style="color: var(--text-secondary);">Project:</span> <span style="color: var(--accent-color);">${escapeHtml(session.project || '-')}</span></div>
-                                    <div><span style="color: var(--text-secondary);">Caller:</span> <span style="color: var(--success-color);">${escapeHtml(session.caller || '-')}</span></div>
-                                    <div><span style="color: var(--text-secondary);">Called:</span> <span style="color: var(--warning-color);">${escapeHtml(session.called || '-')}</span></div>
-                                </div>
-                            </div>`;
-                        }).join('') + '</div>';
+                    // Charger la table Calls
+                    loadLogsCalls();
                 } else {
-                    container.innerHTML = '<div class="empty-state">❌ Erreur: ' + (data.error || 'Erreur inconnue') + '</div>';
+                    if (callsContainer) {
+                        callsContainer.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading calls</td></tr>';
+                    }
                 }
             } catch (e) {
                 console.error('Error loading sessions:', e);
-                container.innerHTML = '<div class="empty-state">❌ Erreur: ' + e.message + '</div>';
+                if (callsContainer) {
+                    callsContainer.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading calls</td></tr>';
+                }
+            }
+        }
+
+        // Load calls table for logs explorer
+        async function loadLogsCalls() {
+            const date = document.getElementById('logs-date').value;
+            const container = document.getElementById('logs-calls-container');
+
+            if (!date) {
+                container.innerHTML = '<tr><td colspan="6" class="empty-state">Select a date first</td></tr>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
+                const data = await response.json();
+
+                if (data.success) {
+                    const sessions = data.sessions || {};
+                    let sessionList = Object.values(sessions);
+
+                    // Filtrer les appels avec caller contenant un point
+                    sessionList = sessionList.filter(session => {
+                        const caller = session.caller || '';
+                        return !caller.includes('.');
+                    });
+
+                    // Tri par date descendante (plus récent en haut)
+                    sessionList.sort((a, b) => {
+                        const dateA = a.create_date || '';
+                        const dateB = b.create_date || '';
+                        return dateB.localeCompare(dateA);
+                    });
+
+                    // Mettre à jour le titre avec le nombre de calls
+                    updateCallsTableTitle(sessionList.length);
+
+                    if (sessionList.length === 0) {
+                        container.innerHTML = '<tr><td colspan="6" class="empty-state">No calls found</td></tr>';
+                        return;
+                    }
+
+                    container.innerHTML = sessionList.map(session => {
+                        const createDate = session.create_date || '-';
+                        const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.caller) : '-';
+                        const called = (session.called && session.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.called) : '-';
+                        const sessionShort = (session.id || '-').split('@')[0];
+
+                        // Formater la date au format ISO 2026-02-20 23:59:59
+                        const formattedDate = formatDateToISO(createDate);
+
+                        return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">
+                            <td>${formattedDate}</td>
+                            <td>${caller}</td>
+                            <td>${called}</td>
+                            <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
+                            <td>${session.project || '-'}</td>
+                            <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">View</button></td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading calls</td></tr>';
+                }
+            } catch (e) {
+                console.error('Error loading calls:', e);
+                container.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading calls</td></tr>';
+            }
+        }
+
+        // Mettre à jour le titre de la table avec le nombre de calls
+        function updateCallsTableTitle(count) {
+            const titleElement = document.querySelector('#calls-table-container .card-title');
+            if (titleElement) {
+                titleElement.textContent = `📞 Calls (${count})`;
+            }
+        }
+
+        // Formater une date au format ISO 2026-02-20 23:59:59
+        function formatDateToISO(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+
+            // Parser le format français "HH:MM:SS le DD/MM/YYYY"
+            const match = dateStr.match(/(\d{2}:\d{2}:\d{2}) le (\d{2})\/(\d{2})\/(\d{4})/);
+            if (match) {
+                const time = match[1];
+                const day = match[2];
+                const month = match[3];
+                const year = match[4];
+                return `${year}-${month}-${day} ${time}`;
+            }
+
+            // Si déjà au format ISO, retourner tel quel
+            if (dateStr.includes('T') || dateStr.includes(' ')) {
+                return dateStr.substring(0, 19);
+            }
+
+            return dateStr;
+        }
+
+        function filterLogsCalls() {
+            const search = document.getElementById('logs-calls-search').value.toLowerCase();
+            const date = document.getElementById('logs-date').value;
+
+            if (!date) return;
+
+            // Get current calls data
+            fetch('/api/rlog/sessions?date=' + encodeURIComponent(date))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const sessions = data.sessions || {};
+                        let sessionList = Object.values(sessions);
+
+                        // Filtrer les appels avec caller contenant un point
+                        sessionList = sessionList.filter(session => {
+                            const caller = session.caller || '';
+                            return !caller.includes('.');
+                        });
+
+                        // Filtrer par recherche
+                        const filtered = sessionList.filter(session => {
+                            const caller = (session.caller || '').toLowerCase();
+                            const called = (session.called || '').toLowerCase();
+                            const sessionId = (session.id || '').toLowerCase();
+                            const project = (session.project || '').toLowerCase();
+                            const createDate = (session.create_date || '').toLowerCase();
+
+                            return caller.includes(search) ||
+                                called.includes(search) ||
+                                sessionId.includes(search) ||
+                                project.includes(search) ||
+                                createDate.includes(search);
+                        });
+
+                        const container = document.getElementById('logs-calls-container');
+                        if (filtered.length === 0) {
+                            container.innerHTML = '<tr><td colspan="6" class="empty-state">No matching calls</td></tr>';
+                        } else {
+                            container.innerHTML = filtered.map(session => {
+                                const createDate = session.create_date || '-';
+                                // Formater la date au format ISO 2026-02-20 23:59:59
+                                const formattedDate = formatDateToISO(createDate);
+                                const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.caller) : '-';
+                                const called = (session.called && session.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.called) : '-';
+                                const sessionShort = (session.id || '-').split('@')[0];
+
+                                return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">
+                                    <td>${formattedDate}</td>
+                                    <td>${caller}</td>
+                                    <td>${called}</td>
+                                    <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
+                                    <td>${session.project || '-'}</td>
+                                    <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">View</button></td>
+                                </tr>`;
+                            }).join('');
+                        }
+                    }
+                });
+        }
+
+        // Afficher le nombre de sessions dans le titre de la table
+        async function updateCallsTableTitle() {
+            const date = document.getElementById('logs-date').value;
+            if (!date) return;
+
+            try {
+                const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
+                const data = await response.json();
+
+                if (data.success) {
+                    const sessions = data.sessions || {};
+                    let sessionList = Object.values(sessions);
+
+                    // Filtrer les appels avec caller contenant un point
+                    sessionList = sessionList.filter(session => {
+                        const caller = session.caller || '';
+                        return !caller.includes('.');
+                    });
+
+                    const titleElement = document.querySelector('#calls-table-container .card-title');
+                    if (titleElement) {
+                        titleElement.textContent = `📞 Calls (${sessionList.length})`;
+                    }
+                }
+            } catch (e) {
+                console.error('Error updating calls table title:', e);
             }
         }
     </script>

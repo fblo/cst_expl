@@ -25,7 +25,8 @@ from snapshots import (
 from paths import (
     get_nfs_log_path,
     get_hostnames_for_project,
-    get_local_hostnames_for_project
+    get_local_hostnames_for_project,
+    get_ssh_hostname_for_project
 )
 from mysql_queries import _get_project_hostname_from_mysql
 
@@ -85,16 +86,57 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
         # No snapshot - proceed with retrieval
         cleanup_stale_dispatches(7200)
-        
-        _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des hostnames pour {project} dans MySQL..."
-        valid_hostnames = get_hostnames_for_project(project)
 
-        if not valid_hostnames:
-            _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"ERREUR, NFS vers ccc_logs non monté ! ({NFS_CONFIG['mount_directory']})"
-            return
+        if is_today:
+            # For today's logs, first get svc_hostname to connect to
+            _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche du hostname SSH pour {project}..."
+            svc_hostname = get_ssh_hostname_for_project(project)
 
-        hostname = valid_hostnames[0]
+            if not svc_hostname:
+                _log_retrieval_jobs[job_id]["status"] = "error"
+                _log_retrieval_jobs[job_id]["error"] = f"ERREUR: Aucun hostname SSH trouvé pour {project}"
+                return
+
+            # Connect to svc_hostname to get the actual ps_hostname
+            _log_retrieval_jobs[job_id]["progress"] = f"🔍 Connexion à {svc_hostname} pour obtenir le ps_hostname..."
+            logger.info(f"[SSH] Connecting to {svc_hostname} to get ps_hostname")
+
+            ssh_cmd = [
+                "sshpass", "-p", SSH_CONFIG["password"],
+                "ssh", "-o", "StrictHostKeyChecking=no",
+                "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+                "-o", "HostKeyAlgorithms=+ssh-rsa",
+                "-o", "KexAlgorithms=+diffie-hellman-group1-sha1",
+                f"{SSH_CONFIG['user']}@{svc_hostname}",
+                "hostname"
+            ]
+
+            logger.info(f"[SSH] Command: {' '.join(ssh_cmd)}")
+
+            ssh_result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=60)
+
+            logger.info(f"[SSH] Return code: {ssh_result.returncode}")
+            logger.info(f"[SSH] Stdout: {ssh_result.stdout}")
+            logger.info(f"[SSH] Stderr: {ssh_result.stderr}")
+
+            if ssh_result.returncode != 0:
+                _log_retrieval_jobs[job_id]["status"] = "error"
+                _log_retrieval_jobs[job_id]["error"] = f"ERREUR: Impossible de se connecter à {svc_hostname} pour obtenir le ps_hostname"
+                return
+
+            hostname = ssh_result.stdout.strip()
+            logger.info(f"[SSH] Obtenu ps_hostname: {hostname}")
+        else:
+            # For past days, use NFS hostname
+            _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des hostnames pour {project} dans MySQL..."
+            valid_hostnames = get_hostnames_for_project(project)
+
+            if not valid_hostnames:
+                _log_retrieval_jobs[job_id]["status"] = "error"
+                _log_retrieval_jobs[job_id]["error"] = f"ERREUR, NFS vers ccc_logs non monté ! ({NFS_CONFIG['mount_directory']})"
+                return
+
+            hostname = valid_hostnames[0]
         date_based_dir = os.path.join(target_dir, "import_logs", f"{project}_{date}")
 
         if is_today:
@@ -109,7 +151,11 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
             remote_pattern = f"log_{date_pattern}_*.log"
             
             _log_retrieval_jobs[job_id]["progress"] = f"📥 SCP: copie des logs {date} depuis {hostname}..."
-            
+
+            logger.info(f"[SCP] Starting SCP from {hostname} for project {project} on {date}")
+            logger.info(f"[SCP] Remote path: {remote_dir}/{remote_pattern}")
+            logger.info(f"[SCP] Local path: {logger_dir}")
+
             sshpass_cmd = [
                 "sshpass", "-p", SSH_CONFIG["password"],
                 "scp", "-o", "StrictHostKeyChecking=no",
@@ -119,23 +165,29 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
                 f"{SSH_CONFIG['user']}@{hostname}:{remote_dir}/{remote_pattern}",
                 logger_dir + "/"
             ]
-            
+
+            # logger.info(f"[SCP] Command: {' '.join(sshpass_cmd)}")
+
             scp_result = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=300)
-            
+
+            logger.info(f"[SCP] Return code: {scp_result.returncode}")
+            logger.info(f"[SCP] Stdout: {scp_result.stdout}")
+            logger.info(f"[SCP] Stderr: {scp_result.stderr}")
+
             if scp_result.returncode != 0:
                 if "sshpass" in scp_result.stderr or "not found" in scp_result.stderr.lower():
                     _log_retrieval_jobs[job_id]["error"] = "ERREUR: sshpass non installé"
                     _log_retrieval_jobs[job_id]["status"] = "error"
                     return
-            
+
             copied_logs = glob.glob(os.path.join(logger_dir, "log_*.log"))
             copied = len(copied_logs)
-            
+
             if copied == 0:
                 _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier log_{date_pattern}_*.log trouvé"
                 _log_retrieval_jobs[job_id]["status"] = "error"
                 return
-            
+
             _log_retrieval_jobs[job_id]["progress"] = f"✅ {copied} fichiers copiés via SSH"
             _log_retrieval_jobs[job_id]["copied"] = copied
             _log_retrieval_jobs[job_id]["files_source"] = "ssh"

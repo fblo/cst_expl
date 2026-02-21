@@ -1164,40 +1164,115 @@ def get_rlog_session_detail_direct(logs_dir: str, session_id: str, date: str = N
     }
 
 
+def _get_session_call_called_from_events(events: List[Dict[str, Any]]) -> tuple:
+    """Extract caller and called numbers from parsed RLOG events (similar to _get_session_caller_called)"""
+    caller = ""
+    called = ""
+    phones_found = []  # List of (event_name, phone_number)
+
+    for event in events:
+        event_name = event.get("name", "")
+        string_data = event.get("data", "")
+        phones = event.get("_phones", [])
+
+        # Add phones from _phones field
+        for phone in phones:
+            if phone and len(phone) >= 8:
+                phones_found.append((event_name, phone))
+
+        # Also extract from string_data as fallback
+        if string_data:
+            phone_pattern = r'(?:00\d{2}|\+?\d{1,3}[-.\s]?)?\d{2}[-.\s]?\d{2}[-.\s]?\d{2}[-.\s]?\d{2}'
+            phones = re.findall(phone_pattern, string_data)
+            for p in phones:
+                normalized = p.lstrip('00').replace('-', '').replace('.', '').replace(' ', '')
+                if len(normalized) >= 8 and normalized.isdigit():
+                    phones_found.append((event_name, p))
+
+    # Analyze events to determine caller/called (same logic as _get_session_caller_called)
+    outcall_phones = []  # Outgoing calls - these are typically the caller
+    incall_phones = []   # Incoming calls - these are typically the called
+    ccxml_loaded_phones = []  # ccxml.loaded - contains caller (ANI/CLI)
+    connection_alerting_phones = []  # connection.alerting - contains called (DNIS)
+    other_phones = []
+
+    for event_name, phone in phones_found:
+        event_lower = event_name.lower()
+        if 'outcall' in event_lower:
+            outcall_phones.append(phone)
+        elif 'incall' in event_lower:
+            incall_phones.append(phone)
+        elif 'ccxml.loaded' in event_lower:
+            ccxml_loaded_phones.append(phone)
+        elif 'connection.alerting' in event_lower:
+            connection_alerting_phones.append(phone)
+        else:
+            other_phones.append((event_name, phone))
+
+    # Priority order for caller:
+    # 1. ccxml.loaded - contains the calling number (ANI/CLI)
+    # 2. OutCall events
+    # 3. Other events with valid phone numbers
+    if ccxml_loaded_phones:
+        caller = ccxml_loaded_phones[0]
+    elif outcall_phones:
+        caller = outcall_phones[0]
+    elif other_phones:
+        for event_name, phone in other_phones:
+            if len(phone) >= 8:
+                caller = phone
+                break
+
+    # Priority order for called:
+    # 1. connection.alerting - contains the called number (DNIS)
+    # 2. INCall events
+    # 3. Other events with valid phone numbers (different from caller)
+    if connection_alerting_phones:
+        called = connection_alerting_phones[0]
+    elif incall_phones:
+        called = incall_phones[0]
+    elif other_phones:
+        for event_name, phone in other_phones:
+            if len(phone) >= 8 and phone != caller:
+                called = phone
+                break
+
+    return caller, called
+
 def get_rlog_sessions_direct(logs_dir: str, date: str = None) -> Dict[str, Any]:
     """Récupère toutes les sessions depuis les fichiers log (sans dispatch)"""
     sessions = {}
-    
+
     # Use all log files recursively
     log_files = sorted(glob.glob(os.path.join(logs_dir, '**', 'log_*.log'), recursive=True))
-    
+
     for log_file in log_files:
         filename = os.path.basename(log_file)
-        
+
         if date and date.replace('-', '_') not in filename:
             continue
-        
+
         try:
             with open(log_file, 'rb') as f:
                 content = f.read()
-            
+
             # Find all session_ patterns
             pattern = b"session_"
             for match in re.finditer(pattern, content):
                 start = match.start()
-                
+
                 # Find the end (null byte or non-printable)
                 end = start
                 while end < len(content) and content[end] > 32 and content[end] < 127:
                     end += 1
-                
+
                 if end > start:
                     session_id = content[start:end].decode('utf-8', errors='replace')
-                    
+
                     # Extract clean session ID - format: session_N@X.Y.Z.Ccxml.HOSTNAME
                     # Must end EXACTLY with ps-ics-prd-cst-fr-529 (no suffix)
                     valid_hostname = 'ps-ics-prd-cst-fr-529'
-                    
+
                     if session_id.endswith(valid_hostname):
                         # This is a clean session ID
                         if session_id not in sessions:
@@ -1208,20 +1283,20 @@ def get_rlog_sessions_direct(logs_dir: str, date: str = None) -> Dict[str, Any]:
                                 "caller": "",
                                 "called": ""
                             }
-                            
+
                             # Extract caller and called from the context around this session
                             context_start = max(0, start - 3000)
                             context_end = min(len(content), start + 3000)
                             context = content[context_start:context_end].decode('latin-1', errors='replace')
-                            
+
                             # Look for SIP phone patterns: sip:0612046899@
                             sip_pattern = r'sip:(\d{10,})@'
                             sip_matches = re.findall(sip_pattern, context)
-                            
+
                             # Look for tel: phone patterns: tel:0033157329750
                             tel_pattern = r'tel:(\d{10,})'
                             tel_matches = re.findall(tel_pattern, context)
-                            
+
                             # Filter and assign caller/called
                             all_phones = sip_matches + tel_matches
                             if len(all_phones) >= 2:
@@ -1231,9 +1306,18 @@ def get_rlog_sessions_direct(logs_dir: str, date: str = None) -> Dict[str, Any]:
                             elif len(all_phones) == 1:
                                 # Only one phone found - might be caller
                                 sessions[session_id]["caller"] = all_phones[0]
+
+                            # Also try to parse events for this session to get better caller/called info
+                            parsed_events = parse_rlog_file(log_file, session_id)
+                            if parsed_events:
+                                caller, called = _get_session_call_called_from_events(parsed_events)
+                                if caller:
+                                    sessions[session_id]["caller"] = caller
+                                if called:
+                                    sessions[session_id]["called"] = called
         except Exception as e:
             print(f"Error reading {log_file}: {e}", file=sys.stderr)
-    
+
     return {
         "success": True,
         "date": date,

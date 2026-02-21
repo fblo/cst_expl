@@ -140,6 +140,30 @@ def get_hostnames_for_project(project: str) -> List[str]:
     return []
 
 
+def get_ssh_hostname_for_project(project: str) -> Optional[str]:
+    """Get SSH hostname for a project - uses svc_hostname or cccip for today's logs"""
+    from mysql_queries import _get_project_hostname_from_mysql
+    mysql_result = _get_project_hostname_from_mysql(project)
+
+    if mysql_result:
+        # First try svc_hostname
+        svc_hostname = mysql_result.get("svc_hostname")
+        if svc_hostname:
+            return svc_hostname
+
+        # Then try cccip
+        cccip = mysql_result.get("cccip")
+        if cccip:
+            return cccip
+
+        # Fallback to ps_hostname
+        ps_hostname = mysql_result.get("ps_hostname")
+        if ps_hostname:
+            return ps_hostname
+
+    return None
+
+
 def get_ssh_remote_path(hostname: str, project: str) -> str:
     """Get the SSH remote path for today's logs"""
     return os.path.join(
