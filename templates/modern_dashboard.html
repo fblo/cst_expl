@@ -713,16 +713,16 @@
     </div>
 
     <div class="tabs">
-        <div class="tab active" data-tab="users">Users</div>
+        <div class="tab active" data-tab="connect">Projects</div>
+        <div class="tab" data-tab="users">Users</div>
         <div class="tab" data-tab="queues">Queues</div>
         <div class="tab" data-tab="history">Calls</div>
-        <div class="tab" data-tab="logs">📁 Logs Explorer</div>
-        <div class="tab" data-tab="connect">Projects</div>
+        <div class="tab" data-tab="logs">History</div>
     </div>
 
     <div class="content">
         <!-- Users Tab -->
-        <div id="users-tab" class="tab-content active">
+        <div id="users-tab" class="tab-content">
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">CCCP Users</span>
@@ -919,7 +919,7 @@
         </div>
 
         <!-- Connect Tab -->
-        <div id="connect-tab" class="tab-content">
+        <div id="connect-tab" class="tab-content active">
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Select a Project</span>
@@ -1634,8 +1634,8 @@
 
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    document.querySelector('.tab[data-tab="users"]').classList.add('active');
-                    document.getElementById('users-tab').classList.add('active');
+                    document.querySelector('.tab[data-tab="connect"]').classList.add('active');
+                    document.getElementById('connect-tab').classList.add('active');
                 } else {
                     alert('Failed to select server: ' + (data.error || 'Unknown error'));
                 }
@@ -1801,53 +1801,40 @@
 
         // Initialize logs explorer when tab is clicked
         async function loadLogsExplorer() {
-            const projectSelect = document.getElementById('logs-project');
-            
             // Refresh snapshots buttons (in case new ones were created)
             loadSnapshotsButtons();
             
-            // Only load projects once
-            if (logsProjects.length === 0) {
-                projectSelect.innerHTML = '<option value="">Loading...</option>';
+            // Get current project from stats bar
+            const currentProject = document.getElementById('stat-project').textContent;
+            const projectSelect = document.getElementById('logs-project');
+            
+            // Check if a project is selected
+            if (!currentProject || currentProject === '-' || currentProject.includes(',')) {
+                // No project or multiple projects selected
+                projectSelect.innerHTML = '<option value="">No project selected</option>';
                 projectSelect.disabled = true;
                 
-                try {
-                    const response = await fetch('/api/logs/projects');
-                    const data = await response.json();
-                    
-                    projectSelect.innerHTML = '<option value="">Select project...</option>';
-                    projectSelect.disabled = false;
-                    
-                    if (data.success) {
-                        logsProjects = data.projects || [];
-                        
-                        // Show NFS status
-                        const nfsStatus = document.getElementById('nfs-status');
-                        if (nfsStatus) {
-                            nfsStatus.textContent = data.nfs_available 
-                                ? `✅ NFS available (${logsProjects.length} projects)` 
-                                : '⚠️ NFS unavailable';
-                        }
-                        
-                        logsProjects.forEach(p => {
-                            const opt = document.createElement('option');
-                            opt.value = p;
-                            opt.textContent = p;
-                            projectSelect.appendChild(opt);
-                        });
-                    }
-                } catch (e) {
-                    projectSelect.innerHTML = '<option value="">Error loading</option>';
-                    console.error('Error loading projects:', e);
+                // Show message in the calls container
+                const callsContainer = document.getElementById('logs-calls-container');
+                if (callsContainer) {
+                    callsContainer.innerHTML = '<tr><td colspan="6" class="empty-state">Please select a project in the Projects tab first</td></tr>';
                 }
+                return;
             }
+            
+            // Use current project
+            projectSelect.innerHTML = `<option value="${currentProject}">${currentProject}</option>`;
+            projectSelect.disabled = true;
+            
+            // Load snapshots for current project
+            loadSnapshotsButtons();
         }
 
         async function retrieveLogs() {
             const project = document.getElementById('logs-project').value;
             const date = document.getElementById('logs-date').value;
             
-            if (!project || !date) {
+            if (!project || project === 'No project selected' || !date) {
                 alert('Please select a project and date');
                 return;
             }
