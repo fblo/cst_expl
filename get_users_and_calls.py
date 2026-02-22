@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Script pour récupérer les utilisateurs actifs et les appels
-# - Utilisateurs : avec noms réels, durée de connexion
-# - Appels : triés par date descendante, avec numéro appelé
+# Script to retrieve active users and calls
+# - Users: with real names, connection duration
+# - Calls: sorted by date descending, with called number
 
 import subprocess
 import json
@@ -110,10 +110,9 @@ def parse_active_queues_state(active_queues):
 
 
 def get_user_real_names(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
-    """Récupère les vrais noms d'utilisateurs depuis dispatch avec tous les champs"""
-    # Ne pas exécuter si aucun hôte n'est spécifié
+    """Fetch real user names from dispatch with all fields"""
     if not host:
-        print("Aucun hôte spécifié, skipping get_user_real_names", file=sys.stderr)
+        print("No host specified, skipping get_user_real_names", file=sys.stderr)
         return {}
         
     try:
@@ -217,20 +216,19 @@ def get_user_real_names(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
         }
 
         print(
-            f"Utilisateurs dispatch (réels): {len(real_users_map)}/{len(users_map)}",
+            f"Dispatch users (real): {len(real_users_map)}/{len(users_map)}",
             file=sys.stderr,
         )
         return real_users_map
     except Exception as e:
-        print(f"Erreur noms utilisateurs: {e}", file=sys.stderr)
+        print(f"Error fetching user names: {e}", file=sys.stderr)
     return {}
 
 
 def get_ccxml_sessions(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
-    """Récupère les sessions CCXML et les sépare en utilisateurs/appels"""
-    # Ne pas exécuter si aucun hôte n'est spécifié
+    """Fetch CCXML sessions and separate into users/calls"""
     if not host:
-        print("Aucun hôte spécifié, skipping get_ccxml_sessions", file=sys.stderr)
+        print("No host specified, skipping get_ccxml_sessions", file=sys.stderr)
         return [], []
         
     cmd = [
@@ -308,16 +306,15 @@ def get_ccxml_sessions(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
         return users, calls
 
     except Exception as e:
-        print(f"Erreur CCXML: {e}", file=sys.stderr)
+        print(f"CCXML error: {e}", file=sys.stderr)
 
     return [], []
 
 
 def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
-    """Récupère les détails des appels depuis dispatch (TOUTES les sessions)"""
-    # Ne pas exécuter si aucun hôte n'est spécifié
+    """Fetch call details from dispatch (ALL sessions)"""
     if not host:
-        print("Aucun hôte spécifié, skipping get_dispatch_calls", file=sys.stderr)
+        print("No host specified, skipping get_dispatch_calls", file=sys.stderr)
         return {}
         
     cmd = [
@@ -401,25 +398,25 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
         return session_to_info
 
     except Exception as e:
-        print(f"Erreur Dispatch: {e}", file=sys.stderr)
+        print(f"Dispatch error: {e}", file=sys.stderr)
 
     return {}
 
 
 def get_all_data(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
-    """Récupère et combine toutes les données"""
+    """Fetch and combine all data"""
 
-    print("Récupération des utilisateurs...", file=sys.stderr)
+    print("Fetching users...", file=sys.stderr)
     dispatch_users = get_user_real_names(host=host, port=port)
 
-    print("Récupération des sessions CCXML...", file=sys.stderr)
+    print("Fetching CCXML sessions...", file=sys.stderr)
     ccxml_users, ccxml_calls = get_ccxml_sessions(host=host, port=port)
 
-    print("Récupération des détails dispatch...", file=sys.stderr)
+    print("Fetching dispatch details...", file=sys.stderr)
     dispatch_calls = get_dispatch_calls(host=host, port=port)
 
     print(
-        f"CCXML - Utilisateurs: {len(ccxml_users)}, Appels: {len(ccxml_calls)}",
+        f"CCXML - Users: {len(ccxml_users)}, Calls: {len(ccxml_calls)}",
         file=sys.stderr,
     )
 
@@ -497,7 +494,7 @@ def get_all_data(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     }
 
     print(
-        f"Total - Utilisateurs actifs: {len(active_users)}, Appels: {len(ccxml_calls)}, Queues: {len(queues)}",
+        f"Total - Active users: {len(active_users)}, Calls: {len(ccxml_calls)}, Queues: {len(queues)}",
         file=sys.stderr,
     )
 
@@ -505,11 +502,10 @@ def get_all_data(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
 
 
 def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
-    """Récupère les queues et leurs statistiques depuis dispatch"""
+    """Fetch queues and their statistics from dispatch"""
     
-    # Ne pas exécuter si aucun hôte n'est spécifié
     if not host:
-        print("Aucun hôte spécifié, skipping get_queue_statistics", file=sys.stderr)
+        print("No host specified, skipping get_queue_statistics", file=sys.stderr)
         return []
         
     queues_cmd = [
@@ -600,18 +596,18 @@ def get_queue_statistics(active_users=None, host=DEFAULT_IP, port=DEFAULT_DISPAT
                 )
 
         print(
-            f"Queues recuperees: {len(queues)}",
+            f"Queues retrieved: {len(queues)}",
             file=sys.stderr,
         )
         return queues
 
     except Exception as e:
-        print(f"Erreur recuperation queues: {e}", file=sys.stderr)
+        print(f"Error retrieving queues: {e}", file=sys.stderr)
     return []
 
 
 class RlogDispatcher:
-    """Gère un dispatch local pour charger et interroger des logs RLOG"""
+    """Manages a local dispatch to load and query RLOG logs"""
     
     DISPATCH_BIN = CCC_BIN["dispatch"]
     UPDATE_BIN = CCC_BIN["update"]
@@ -658,17 +654,17 @@ class RlogDispatcher:
         return cls._instance
     
     def find_available_port(self) -> int:
-        """Trouve un port disponible dans la plage spécifiée"""
+        """Find an available port in the specified range"""
         import socket
         netstat_output = subprocess.run(["netstat", "-nlt"], capture_output=True, text=True).stdout
         
         for i in range(self.BASE_PORT, self.BASE_PORT + self.PORT_RANGE):
             if f":{i}" not in netstat_output:
                 return i
-        raise RuntimeError(f"Aucun port disponible dans la plage {self.BASE_PORT}-{self.BASE_PORT + self.PORT_RANGE}")
+        raise RuntimeError(f"No available port in range {self.BASE_PORT}-{self.BASE_PORT + self.PORT_RANGE}")
     
     def find_log_directories(self) -> List[str]:
-        """Trouve les répertoires contenant des fichiers de logs"""
+        """Find directories containing log files"""
         # First try Logger structure
         logger_pattern = os.path.join(self.logs_dir, "**/log_*.log")
         log_files = glob.glob(logger_pattern, recursive=True)
@@ -688,7 +684,7 @@ class RlogDispatcher:
         return []
     
     def create_logger_structure(self, project: str = "ARTELIA", hostname: str = "ps-ics-prd-cst-fr-529") -> str:
-        """Crée la structure Logger/PROJECT/_/ccenter_ccxml/Ccxml/HOSTNAME à partir de import_logs"""
+        """Create the Logger/PROJECT/_/ccenter_ccxml/Ccxml/HOSTNAME structure from import_logs"""
         import_logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
 
         # Return the specific project path for dispatch (only this project's logs)
@@ -698,7 +694,7 @@ class RlogDispatcher:
         if os.path.exists(project_logger_dir):
             log_files = glob.glob(os.path.join(project_logger_dir, "log_*.log"))
             if log_files:
-                print(f"✅ Trouvé {len(log_files)} fichiers logs pour {project} dans {project_logger_dir}", file=sys.stderr)
+                print(f"Found {len(log_files)} log files for {project} in {project_logger_dir}", file=sys.stderr)
                 return project_logger_dir
 
         # Create structure and copy logs
@@ -713,11 +709,11 @@ class RlogDispatcher:
             except Exception as e:
                 print(f"Warning: Could not copy {log_file}: {e}", file=sys.stderr)
 
-        print(f"✅ Copié {len(log_files)} fichiers logs vers {project_logger_dir}", file=sys.stderr)
+        print(f"Copied {len(log_files)} log files to {project_logger_dir}", file=sys.stderr)
         return project_logger_dir
     
     def get_logs_path(self) -> str:
-        """Retourne le chemin des logs pour le dispatch"""
+        """Return the logs path for dispatch"""
         # Check if Logger structure exists
         logger_pattern = os.path.join(self.logs_dir, "**/log_*.log")
         log_files = glob.glob(logger_pattern, recursive=True)
@@ -734,7 +730,7 @@ class RlogDispatcher:
         return self.create_logger_structure()
     
     def launch(self, timeout: int = 30) -> int:
-        """Lance le dispatch en mode slave avec gestion du timeout (2h)"""
+        """Launch dispatch in slave mode with timeout handling (2h)"""
         
         INACTIVITY_TIMEOUT = 2 * 60 * 60  # 2 hours in seconds
         
@@ -744,7 +740,7 @@ class RlogDispatcher:
                 self.port = None
             else:
                 if time.time() - self._last_activity > INACTIVITY_TIMEOUT:
-                    print(f"🛑 Dispatch inactif depuis plus de 2h, arrêt...", file=sys.stderr)
+                    print(f"Dispatch inactive for more than 2h, stopping...", file=sys.stderr)
                     self.stop()
                 else:
                     return self.port
@@ -763,7 +759,7 @@ class RlogDispatcher:
                     self.port = port
                     self.process = None  # External dispatch, no subprocess to manage
                     self._last_activity = time.time()
-                    print(f"✅ Utilise dispatch existant sur port {port}", file=sys.stderr)
+                    print(f"Using existing dispatch on port {port}", file=sys.stderr)
                     return port
             except:
                 pass
@@ -774,9 +770,9 @@ class RlogDispatcher:
         logs_path = self.create_logger_structure()
         
         if not logs_path:
-            raise RuntimeError(f"Aucun fichier .log trouvé dans {self.logs_dir}")
+            raise RuntimeError(f"No .log file found in {self.logs_dir}")
         
-        print(f"🚀 Dispatch sur port {self.port} avec logs: {logs_path}", file=sys.stderr)
+        print(f"Launching dispatch on port {self.port} with logs: {logs_path}", file=sys.stderr)
         
         env = os.environ.copy()
         env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
@@ -805,15 +801,15 @@ class RlogDispatcher:
         
         if self.process.poll() is not None:
             stderr = self.process.stderr.read().decode() if self.process.stderr else ""
-            raise RuntimeError(f"Dispatch arrêté: {stderr}")
+            raise RuntimeError(f"Dispatch stopped: {stderr}")
         
         self._last_activity = time.time()
         RlogDispatcher._instance = self
-        print(f"✅ Dispatch prêt sur 127.0.0.1:{self.port}", file=sys.stderr)
+        print(f"Dispatch ready on 127.0.0.1:{self.port}", file=sys.stderr)
         return self.port
         
     def _calculate_days(self) -> List[str]:
-        """Calcule les jours disponibles dans les logs"""
+        """Calculate available days in logs"""
         days = set()
         
         log_files = glob.glob(os.path.join(self.logs_dir, "**/log_*.log"), recursive=True)
@@ -827,14 +823,14 @@ class RlogDispatcher:
         return sorted(days)
     
     def query(self, query_type: str, **kwargs) -> Dict[str, Any]:
-        """Exécute une requête sur le dispatch"""
+        """Execute a query on the dispatch"""
         if not self.port or not self.process:
             self.launch()
         
         # Update activity timestamp
         self._last_activity = time.time()
         
-        # Lazy load le jour demandé
+        # Lazy load the requested day
         day = kwargs.get("date", "").replace("-", "_")
         if day and day not in self._loaded_days:
             self._load_day(day)
@@ -889,13 +885,13 @@ class RlogDispatcher:
         except subprocess.TimeoutExpired:
             return {
                 "success": False,
-                "error": "Timeout lors de la requête",
+                "error": "Query timeout",
                 "timed_out": True
             }
     
     def _load_day(self, day: str):
-        """Charge un jour spécifique dans le dispatch"""
-        print(f"  → Chargement {day.replace('_', '-')}...", file=sys.stderr)
+        """Load a specific day into the dispatch"""
+        print(f"  → Loading {day.replace('_', '-')}...", file=sys.stderr)
         try:
             subprocess.run(
                 [
@@ -911,17 +907,17 @@ class RlogDispatcher:
                 timeout=10
             )
         except subprocess.TimeoutExpired:
-            print(f"  ⚠️ Timeout lors du chargement de {day}", file=sys.stderr)
+            print(f"  Timeout loading {day}", file=sys.stderr)
     
     def stop(self):
-        """Arrête le dispatch"""
+        """Stop the dispatch"""
         if self.process:
             try:
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
                 self.process.wait(timeout=5)
-                print(f"🛑 Dispatch arrêté", file=sys.stderr)
+                print(f"Dispatch stopped", file=sys.stderr)
             except Exception as e:
-                print(f"⚠️ Erreur lors de l'arrêt du dispatch: {e}", file=sys.stderr)
+                print(f"Error stopping dispatch: {e}", file=sys.stderr)
                 try:
                     self.process.kill()
                 except:
@@ -933,9 +929,9 @@ class RlogDispatcher:
 
 
 def parse_rlog_file(log_file: str, target_session: str = None) -> List[Dict[str, Any]]:
-    """Parse un fichier log binaire et extraie TOUS les événements de session"""
+    """Parse a binary log file and extract ALL session events"""
     events = []
-    seen_events = set()  # Pour éliminer les duplicatas
+    seen_events = set()  # To eliminate duplicates
     
     if not os.path.exists(log_file):
         return events
@@ -1084,7 +1080,7 @@ def parse_rlog_file(log_file: str, target_session: str = None) -> List[Dict[str,
 
 
 def find_session_in_logs(logs_dir: str, session_id: str, date: str = None) -> Optional[str]:
-    """Trouve le fichier log contenant une session"""
+    """Find the log file containing a session"""
     date_pattern = date.replace('-', '_') if date else None
     
     log_files = glob.glob(os.path.join(logs_dir, "**/log_*.log"), recursive=True)
@@ -1103,13 +1099,13 @@ def find_session_in_logs(logs_dir: str, session_id: str, date: str = None) -> Op
 
 
 def get_rlog_session_detail_direct(logs_dir: str, session_id: str, date: str = None) -> Dict[str, Any]:
-    """Récupère les détails d'une session directement depuis les fichiers log (sans dispatch)"""
+    """Get session details directly from log files (without dispatch)"""
     log_file = find_session_in_logs(logs_dir, session_id, date)
     
     if not log_file:
         return {
             "success": False,
-            "error": f"Session '{session_id}' non trouvée pour la date {date}"
+            "error": f"Session '{session_id}' not found for date {date}"
         }
     
     events = parse_rlog_file(log_file, session_id)
@@ -1117,7 +1113,7 @@ def get_rlog_session_detail_direct(logs_dir: str, session_id: str, date: str = N
     if not events:
         return {
             "success": False,
-            "error": "Aucun événement trouvé pour cette session"
+            "error": "No events found for this session"
         }
     
     # Enhance events with better formatting
@@ -1240,7 +1236,7 @@ def _get_session_call_called_from_events(events: List[Dict[str, Any]]) -> tuple:
     return caller, called
 
 def get_rlog_sessions_direct(logs_dir: str, date: str = None) -> Dict[str, Any]:
-    """Récupère toutes les sessions depuis les fichiers log (sans dispatch)"""
+    """Get all sessions from log files (without dispatch)"""
     sessions = {}
 
     # Use all log files recursively
@@ -1326,7 +1322,7 @@ def get_rlog_sessions_direct(logs_dir: str, date: str = None) -> Dict[str, Any]:
 
 
 def load_rlog_session_detail(session_id: str, logs_dir: str) -> Dict[str, Any]:
-    """Charge les logs et récupère les détails d'une session"""
+    """Load logs and retrieve session details"""
     dispatcher = RlogDispatcher(logs_dir)
     
     try:
@@ -1345,7 +1341,7 @@ def load_rlog_session_detail(session_id: str, logs_dir: str) -> Dict[str, Any]:
         if not object_id:
             return {
                 "success": False,
-                "error": f"Session '{session_id}' non trouvée"
+                "error": f"Session '{session_id}' not found"
             }
         
         events_result = dispatcher.query("session_detail", object_id=object_id)
@@ -1360,7 +1356,7 @@ def load_rlog_session_detail(session_id: str, logs_dir: str) -> Dict[str, Any]:
 
 
 def show_help_and_exit():
-    """Affiche l'aide et quitte le programme"""
+    """Show help and exit the program"""
     parser = argparse.ArgumentParser(
         description="Fetch users and calls from CCCP server"
     )

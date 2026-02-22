@@ -57,7 +57,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
                 info = _dispatch_info.get(snapshot_port, {})
                 process = info.get("process")
                 if process and process.poll() is None:
-                    _log_retrieval_jobs[job_id]["progress"] = f"✅ Snapshot: dispatch actif sur port {snapshot_port}"
+                    _log_retrieval_jobs[job_id]["progress"] = f"Snapshot: dispatch active on port {snapshot_port}"
                     _log_retrieval_jobs[job_id]["cached"] = True
                     _log_retrieval_jobs[job_id]["dispatch_port"] = snapshot_port
                     _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
@@ -75,7 +75,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
                 existing_logs_compressed = glob.glob(os.path.join(snapshot_dir, "**", "log_*.bz2"), recursive=True)
 
                 if existing_logs or existing_logs_compressed:
-                    _log_retrieval_jobs[job_id]["progress"] = "📁 Logs locaux détectés, lancement dispatch..."
+                    _log_retrieval_jobs[job_id]["progress"] = "Local logs detected, launching dispatch..."
                     _log_retrieval_jobs[job_id]["cached"] = True
                     _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
                     _log_retrieval_jobs[job_id]["files_source"] = "local"
@@ -89,16 +89,16 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
         if is_today:
             # For today's logs, first get svc_hostname to connect to
-            _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche du hostname SSH pour {project}..."
+            _log_retrieval_jobs[job_id]["progress"] = f"Looking up SSH hostname for {project}..."
             svc_hostname = get_ssh_hostname_for_project(project)
 
             if not svc_hostname:
                 _log_retrieval_jobs[job_id]["status"] = "error"
-                _log_retrieval_jobs[job_id]["error"] = f"ERREUR: Aucun hostname SSH trouvé pour {project}"
+                _log_retrieval_jobs[job_id]["error"] = f"ERROR: No SSH hostname found for {project}"
                 return
 
             # Connect to svc_hostname to get the actual ps_hostname
-            _log_retrieval_jobs[job_id]["progress"] = f"🔍 Connexion à {svc_hostname} pour obtenir le ps_hostname..."
+            _log_retrieval_jobs[job_id]["progress"] = f"Connecting to {svc_hostname} to get ps_hostname..."
             logger.info(f"[SSH] Connecting to {svc_hostname} to get ps_hostname")
 
             ssh_cmd = [
@@ -121,19 +121,19 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
             if ssh_result.returncode != 0:
                 _log_retrieval_jobs[job_id]["status"] = "error"
-                _log_retrieval_jobs[job_id]["error"] = f"ERREUR: Impossible de se connecter à {svc_hostname} pour obtenir le ps_hostname"
+                _log_retrieval_jobs[job_id]["error"] = f"ERROR: Unable to connect to {svc_hostname} to get ps_hostname"
                 return
 
             hostname = ssh_result.stdout.strip()
-            logger.info(f"[SSH] Obtenu ps_hostname: {hostname}")
+            logger.info(f"[SSH] Obtained ps_hostname: {hostname}")
         else:
             # For past days, use NFS hostname
-            _log_retrieval_jobs[job_id]["progress"] = f"🔍 Recherche des hostnames pour {project} dans MySQL..."
+            _log_retrieval_jobs[job_id]["progress"] = f"Looking up hostnames for {project} in MySQL..."
             valid_hostnames = get_hostnames_for_project(project)
 
             if not valid_hostnames:
                 _log_retrieval_jobs[job_id]["status"] = "error"
-                _log_retrieval_jobs[job_id]["error"] = f"ERREUR, NFS vers ccc_logs non monté ! ({NFS_CONFIG['mount_directory']})"
+                _log_retrieval_jobs[job_id]["error"] = f"ERROR, NFS to ccc_logs not mounted! ({NFS_CONFIG['mount_directory']})"
                 return
 
             hostname = valid_hostnames[0]
@@ -141,7 +141,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
         if is_today:
             # SSH retrieval for today's logs
-            _log_retrieval_jobs[job_id]["progress"] = "🔍 Récupération des logs du jour via SSH..."
+            _log_retrieval_jobs[job_id]["progress"] = "Retrieving today's logs via SSH..."
             
             logger_dir = os.path.join(date_based_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
             os.makedirs(logger_dir, exist_ok=True)
@@ -150,7 +150,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
             remote_dir = os.path.join(SSH_CONFIG["remote_base_path"], project, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
             remote_pattern = f"log_{date_pattern}_*.log"
             
-            _log_retrieval_jobs[job_id]["progress"] = f"📥 SCP: copie des logs {date} depuis {hostname}..."
+            _log_retrieval_jobs[job_id]["progress"] = f"SCP: copying logs {date} from {hostname}..."
 
             logger.info(f"[SCP] Starting SCP from {hostname} for project {project} on {date}")
             logger.info(f"[SCP] Remote path: {remote_dir}/{remote_pattern}")
@@ -176,7 +176,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
             if scp_result.returncode != 0:
                 if "sshpass" in scp_result.stderr or "not found" in scp_result.stderr.lower():
-                    _log_retrieval_jobs[job_id]["error"] = "ERREUR: sshpass non installé"
+                    _log_retrieval_jobs[job_id]["error"] = "ERROR: sshpass not installed"
                     _log_retrieval_jobs[job_id]["status"] = "error"
                     return
 
@@ -184,15 +184,15 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
             copied = len(copied_logs)
 
             if copied == 0:
-                _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier log_{date_pattern}_*.log trouvé"
+                _log_retrieval_jobs[job_id]["error"] = f"No log_{date_pattern}_*.log file found"
                 _log_retrieval_jobs[job_id]["status"] = "error"
                 return
 
-            _log_retrieval_jobs[job_id]["progress"] = f"✅ {copied} fichiers copiés via SSH"
+            _log_retrieval_jobs[job_id]["progress"] = f"{copied} files copied via SSH"
             _log_retrieval_jobs[job_id]["copied"] = copied
             _log_retrieval_jobs[job_id]["files_source"] = "ssh"
             
-            _log_retrieval_jobs[job_id]["progress"] = "🚀 Lancement du dispatch..."
+            _log_retrieval_jobs[job_id]["progress"] = "Launching dispatch..."
             cleanup_stale_dispatches(7200)
             launch_dispatch_for_job(job_id, project, date, date_based_dir)
             return
@@ -202,7 +202,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
         if not nfs_path or not os.path.exists(nfs_path):
             _log_retrieval_jobs[job_id]["status"] = "error"
-            _log_retrieval_jobs[job_id]["error"] = f"Répertoire NFS introuvable: {nfs_path}"
+            _log_retrieval_jobs[job_id]["error"] = f"NFS directory not found: {nfs_path}"
             return
 
         logger_dir = os.path.join(date_based_dir, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
@@ -213,7 +213,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
         if existing_logs or existing_logs_compressed:
             total_files = len(existing_logs) + len(existing_logs_compressed)
-            _log_retrieval_jobs[job_id]["progress"] = f"✅ Logs déjà récupérés ({total_files} fichiers)"
+            _log_retrieval_jobs[job_id]["progress"] = f"Logs already retrieved ({total_files} files)"
             _log_retrieval_jobs[job_id]["copied"] = total_files
             _log_retrieval_jobs[job_id]["cached"] = True
             is_cached = True
@@ -225,12 +225,12 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
             
             if not nfs_files:
                 _log_retrieval_jobs[job_id]["status"] = "error"
-                _log_retrieval_jobs[job_id]["error"] = f"Aucun fichier log_{date_pattern}* trouvé"
+                _log_retrieval_jobs[job_id]["error"] = f"No log_{date_pattern}* file found"
                 return
 
             total_files = len(nfs_files)
             _log_retrieval_jobs[job_id]["total_files"] = total_files
-            _log_retrieval_jobs[job_id]["progress"] = f"📥 {total_files} fichiers trouvés sur NFS"
+            _log_retrieval_jobs[job_id]["progress"] = f"{total_files} files found on NFS"
 
             copied = 0
             decompressed = 0
@@ -245,7 +245,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
                     copied += 1
 
                     if dest.endswith(".bz2"):
-                        _log_retrieval_jobs[job_id]["progress"] = f"🗜️ Décompression {basename}..."
+                        _log_retrieval_jobs[job_id]["progress"] = f"Uncompressing {basename}..."
                         decompressed_path = dest[:-4]
                         import bz2
                         with bz2.open(dest, 'rb') as bz_file:
@@ -318,7 +318,7 @@ def launch_dispatch_for_job(job_id: str, project: str, date: str, logs_dir: str,
 
         if dispatcher.process.poll() is not None:
             stderr = dispatcher.process.stderr.read().decode() if dispatcher.process.stderr else ""
-            raise RuntimeError(f"Dispatch arrêté: {stderr}")
+            raise RuntimeError(f"Dispatch stopped: {stderr}")
 
         dispatcher._last_activity = time_mod.time()
         day = date.replace("-", "_")
@@ -331,14 +331,14 @@ def launch_dispatch_for_job(job_id: str, project: str, date: str, logs_dir: str,
         save_log_snapshot(project, date, dispatcher.port, logs_dir, files_count)
 
         _log_retrieval_jobs[job_id]["status"] = "done"
-        _log_retrieval_jobs[job_id]["progress"] = f"✅ Terminé. Dispatch sur port {dispatcher.port}"
+        _log_retrieval_jobs[job_id]["progress"] = f"Done. Dispatch on port {dispatcher.port}"
         _log_retrieval_jobs[job_id]["dispatch_port"] = dispatcher.port
         _log_retrieval_jobs[job_id]["directory"] = logs_dir
 
     except Exception as e:
         _log_retrieval_jobs[job_id]["status"] = "error"
         _log_retrieval_jobs[job_id]["error"] = str(e)
-        _log_retrieval_jobs[job_id]["progress"] = f"❌ Erreur: {str(e)}"
+        _log_retrieval_jobs[job_id]["progress"] = f"Error: {str(e)}"
 
 
 # Logging setup

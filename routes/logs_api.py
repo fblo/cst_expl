@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Routes API pour la récupération des logs
+API Routes for log retrieval
 """
 
 from flask import jsonify, request
@@ -27,7 +27,7 @@ def api_logs_retrieve():
     
     _log_retrieval_jobs[job_id] = {
         "status": "starting",
-        "progress": "Recherche du hostname pour " + project + "...",
+        "progress": "Looking up hostname for " + project + "...",
         "project": project,
         "date": date,
         "created_at": import_time.time(),

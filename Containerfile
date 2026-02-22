@@ -56,15 +56,18 @@ VOLUME ["/opt/debug/NFS"]
 WORKDIR /app
 
 # Copy application files
-COPY ccenter_dispatch ccenter_ccxml ccenter_update ccenter_report web_server.py get_users_and_calls.py config.py debug_interface.xml ./
+RUN mkdir ccc_bin
+COPY web_server.py get_users_and_calls.py config.py debug_interface.xml dispatch.py snapshots.py paths.py mysql_queries.py jobs.py ./
+COPY ccc_bin/ccenter_dispatch ccc_bin/ccenter_ccxml ccc_bin/ccenter_update ccc_bin/ccenter_report ./ccc_bin
+
 COPY templates/ ./templates/
+COPY routes/ ./routes/
 
 # Set permissions
-RUN chmod +x /app/ccenter_report && \
-    chmod +x /app/ccenter_dispatch && \
-    chmod +x /app/ccenter_ccxml && \
-    chmod +x /app/ccenter_update
-
+RUN chmod +x /app/ccc_bin/ccenter_report && \
+    chmod +x /app/ccc_bin/ccenter_dispatch && \
+    chmod +x /app/ccc_bin/ccenter_ccxml && \
+    chmod +x /app/ccc_bin/ccenter_update
 
 
 # Environment variables for optimization

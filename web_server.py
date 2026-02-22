@@ -116,7 +116,7 @@ class DashboardState:
         self.has_project_selected = False
         self.available_servers: Dict[str, dict] = {}
 
-        # Ne pas démarrer le thread de rafraîchissement automatique tant qu'un serveur n'est pas sélectionné
+        # Don't start the auto-refresh thread until a server is selected
         self.refresh_thread = None
         self.is_refresh_enabled = False
 
@@ -164,7 +164,7 @@ class DashboardState:
 
     def _refresh_users(self):
         """Fetch users, calls, and queues from get_users_and_calls.py"""
-        # Ne pas essayer de rafraîchir si aucun hôte n'est défini
+        # Don't try to refresh if no host is defined
         if not self.current_host:
             logger.debug("No host configured, skipping refresh")
             return
@@ -491,7 +491,7 @@ def api_console_session():
         return jsonify({"success": False, "error": "Session name required"}), 400
 
     def reformat_date(line):
-        """Convert 'HH:MM:SS le DD/MM/YYYY' to '[YYYY-MM-DD HH:MM:SS]'"""
+        """Convert 'HH:MM:SS le DD/MM/YYYY' to 'YYYY-MM-DD HH:MM:SS'"""
         import re
 
         # Match pattern: "HH:MM:SS le DD/MM/YYYY"
@@ -502,7 +502,7 @@ def api_console_session():
             # Convert DD/MM/YYYY to YYYY-MM-DD
             day, month, year = date_part.split("/")
             iso_date = f"{year}-{month}-{day}"
-            return f"[{iso_date} {time_part}]" + line[match.end() :]
+            return f"{iso_date} {time_part}" + line[match.end() :]
         return line
 
     try:
@@ -919,7 +919,7 @@ def api_rlog_cleanup():
             last_activity = getattr(dispatcher, '_last_activity', None)
             import time
             if last_activity and (time.time() - last_activity) > INACTIVITY_TIMEOUT:
-                print(f"🛑 Nettoyage: dispatch inactif depuis {int(time.time() - last_activity)}s", file=sys.stderr)
+                print(f"🛑 Cleanup: dispatch inactive for {int(time.time() - last_activity)}s", file=sys.stderr)
                 dispatcher.stop()
                 RlogDispatcher.reset()
                 return jsonify({
@@ -985,7 +985,7 @@ def api_rlog_sessions():
         logs_path = dispatcher.create_logger_structure()
 
         if not logs_path:
-            raise RuntimeError(f"Aucun fichier .log trouvé dans {logs_dir}")
+            raise RuntimeError(f"No .log file found in {logs_dir}")
 
         env = os.environ.copy()
         env["PATH"] = env.get("PATH", "") + ":/opt/lampp/bin"
@@ -1014,7 +1014,7 @@ def api_rlog_sessions():
 
         if dispatcher.process.poll() is not None:
             stderr = dispatcher.process.stderr.read().decode() if dispatcher.process.stderr else ""
-            raise RuntimeError(f"Dispatch arrêté: {stderr}")
+            raise RuntimeError(f"Dispatch stopped: {stderr}")
 
         dispatcher._last_activity = time_mod.time()
         port = dispatcher.port
@@ -1201,7 +1201,7 @@ def api_rlog_session_detail():
             time_part = match.group(1)
             date_part = match.group(2)
             day, month, year = date_part.split("/")
-            return f"[{year}-{month}-{day} {time_part}]" + line[match.end():]
+            return f"{year}-{month}-{day} {time_part}" + line[match.end():]
         return line
     
     try:
@@ -1242,7 +1242,7 @@ def api_rlog_session_detail():
             logs_path = dispatcher.create_logger_structure()
             
             if not logs_path:
-                raise RuntimeError(f"Aucun fichier .log trouvé dans {logs_dir}")
+                raise RuntimeError(f"No .log file found in {logs_dir}")
             
             import os as os_mod
             env = os_mod.environ.copy()
@@ -1274,7 +1274,7 @@ def api_rlog_session_detail():
             
             if dispatcher.process.poll() is not None:
                 stderr = dispatcher.process.stderr.read().decode() if dispatcher.process.stderr else ""
-                raise RuntimeError(f"Dispatch arrêté: {stderr}")
+                raise RuntimeError(f"Dispatch stopped: {stderr}")
             
             dispatcher._last_activity = time_mod.time()
             port = dispatcher.port
@@ -1383,11 +1383,11 @@ _job_executor = ThreadPoolExecutor(max_workers=5)
 
 
 def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
-    """Exécute le job de dispatch dans un thread séparé"""
+    """Execute the dispatch job in a separate thread"""
     try:
         _job_store[job_id] = {
             "status": "starting",
-            "progress": "Initialisation...",
+            "progress": "Initializing...",
             "session_id": session_id,
             "date": date,
             "created_at": time.time()
@@ -1398,7 +1398,7 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
         
         if dispatch_port:
             # Use the existing dispatch port
-            _job_store[job_id]["progress"] = f"Utilisation du dispatch sur port {dispatch_port}..."
+            _job_store[job_id]["progress"] = f"Using dispatch on port {dispatch_port}..."
             _job_store[job_id]["status"] = "loading"
             
             # Query the existing dispatch
@@ -1427,7 +1427,7 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
             
             if not object_id:
                 _job_store[job_id]["status"] = "error"
-                _job_store[job_id]["error"] = f"Session '{session_id}' non trouvée sur port {dispatch_port}"
+                _job_store[job_id]["error"] = f"Session '{session_id}' not found on port {dispatch_port}"
                 return
             
             # Query events from existing dispatch
@@ -1453,7 +1453,7 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
                     time_part = match.group(1)
                     date_part = match.group(2)
                     day, month, year = date_part.split("/")
-                    return f"[{year}-{month}-{day} {time_part}]" + line[match.end():]
+                    return f"{year}-{month}-{day} {time_part}" + line[match.end():]
                 return line
             
             output_lines = []
@@ -1483,7 +1483,7 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
                         output_lines.append(f"{col_date}   {col_source}   {col_target}   {col_state}   {col_name}   {col_data}")
             
             _job_store[job_id]["status"] = "ready"
-            _job_store[job_id]["progress"] = f"Terminé ({len(output_lines)} événements)"
+            _job_store[job_id]["progress"] = f"Done ({len(output_lines)} events)"
             _job_store[job_id]["result"] = {
                 "success": True,
                 "session": session_id,
@@ -1503,17 +1503,17 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
 
         dispatcher = RlogDispatcher(logs_dir)
 
-        _job_store[job_id]["progress"] = "Lancement du dispatch..."
+        _job_store[job_id]["progress"] = "Launching dispatch..."
         _job_store[job_id]["status"] = "loading"
 
         port = dispatcher.launch(timeout=10)
 
         day = date.replace("-", "_")
-        _job_store[job_id]["progress"] = f"Chargement du jour {date}..."
+        _job_store[job_id]["progress"] = f"Loading day {date}..."
 
         dispatcher._load_day(day)
 
-        _job_store[job_id]["progress"] = "Recherche de la session..."
+        _job_store[job_id]["progress"] = "Searching for session..."
 
         result = dispatcher.query("sessions")
 
@@ -1527,11 +1527,11 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
 
         if not object_id:
             _job_store[job_id]["status"] = "error"
-            _job_store[job_id]["error"] = f"Session '{session_id}' non trouvée"
+            _job_store[job_id]["error"] = f"Session '{session_id}' not found"
             dispatcher.stop()
             return
 
-        _job_store[job_id]["progress"] = "Récupération des événements..."
+        _job_store[job_id]["progress"] = "Retrieving events..."
         _job_store[job_id]["object_id"] = object_id
 
         events_result = dispatcher.query("session_detail", object_id=object_id)
@@ -1591,7 +1591,7 @@ def _run_dispatch_job(job_id: str, logs_dir: str, session_id: str, date: str):
 
 @app.route("/api/rlog/session/detail/dispatch", methods=["POST"])
 def api_rlog_session_detail_dispatch():
-    """Lance un job de dispatch pour récupérer les détails d'une session"""
+    """Launch a dispatch job to retrieve session details"""
     session_id = request.json.get("session_id", "")
     date = request.json.get("date", "2026-02-08")
 
@@ -1615,7 +1615,7 @@ def api_rlog_session_detail_dispatch():
 
 @app.route("/api/rlog/job/<job_id>")
 def api_rlog_job_status(job_id: str):
-    """Récupère le statut d'un job"""
+    """Get the status of a job"""
     if job_id not in _job_store:
         return jsonify({"success": False, "error": "Job not found"}), 404
 
@@ -1642,14 +1642,14 @@ def api_rlog_job_status(job_id: str):
 
 @app.route("/api/rlog/job/<job_id>", methods=["DELETE"])
 def api_rlog_job_cancel(job_id: str):
-    """Annule un job en cours"""
+    """Cancel a running job"""
     if job_id not in _job_store:
         return jsonify({"success": False, "error": "Job not found"}), 404
 
     job = _job_store[job_id]
     if job["status"] in ("starting", "loading"):
         job["status"] = "cancelled"
-        job["progress"] = "Job annulé"
+        job["progress"] = "Job cancelled"
 
     return jsonify({"success": True, "status": "cancelled"})
 
@@ -1736,7 +1736,7 @@ def api_logs_retrieve():
     
     _log_retrieval_jobs[job_id] = {
         "status": "starting",
-        "progress": "Recherche du hostname pour " + project + "...",
+        "progress": "Looking up hostname for " + project + "...",
         "project": project,
         "date": date,
         "created_at": time.time(),
