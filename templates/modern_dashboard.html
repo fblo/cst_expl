@@ -904,14 +904,16 @@
                                     <th>Start</th>
                                     <th>Caller</th>
                                     <th>Called</th>
+                                    <th>Duration</th>
                                     <th>Session</th>
-                                    <th>Project</th>
+                                    <th>Queue</th>
+                                    <th>Agent</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody id="logs-calls-container">
                                 <tr>
-                                    <td colspan="7" class="empty-state">Select a project and date, then click "Retrieve & Load"</td>
+                                    <td colspan="9" class="empty-state">Select a project and date, then click "Retrieve & Load"</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -2014,7 +2016,7 @@
             const container = document.getElementById('logs-calls-container');
 
             if (!date) {
-                container.innerHTML = '<tr><td colspan="7" class="empty-state">Select a date first</td></tr>';
+                container.innerHTML = '<tr><td colspan="9" class="empty-state">Select a date first</td></tr>';
                 return;
             }
 
@@ -2023,19 +2025,14 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const sessions = data.sessions || {};
-                    let sessionList = Object.values(sessions);
-
-                    // Filter calls with caller containing a dot
-                    sessionList = sessionList.filter(session => {
-                        const caller = session.caller || '';
-                        return !caller.includes('.');
-                    });
+                    // Use array directly like /api/history
+                    let sessionList = data.sessions || [];
+                    console.log('First call:', JSON.stringify(sessionList[0]));
 
                     // Tri par date descendante (plus récent en haut)
                     sessionList.sort((a, b) => {
-                        const dateA = a.create_date || '';
-                        const dateB = b.create_date || '';
+                        const dateA = a.create_date_iso || '';
+                        const dateB = b.create_date_iso || '';
                         return dateB.localeCompare(dateA);
                     });
 
@@ -2043,38 +2040,44 @@
                     updateCallsTableTitle(sessionList.length);
 
                     if (sessionList.length === 0) {
-                        container.innerHTML = '<tr><td colspan="7" class="empty-state">No calls found</td></tr>';
+                        container.innerHTML = '<tr><td colspan="9" class="empty-state">No calls found</td></tr>';
                         return;
                     }
 
-                    container.innerHTML = sessionList.map(session => {
-                        const createDate = session.create_date || '-';
-                        const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.caller) : '-';
-                        const called = (session.called && session.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.called) : '-';
-                        const sessionShort = (session.id || '-').split('@')[0];
-                        const callType = session.call_type || '';
+                    function getCallTypeIcon(callType) {
+                        if (callType === 'incoming') {
+                            return '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>';
+                        } else if (callType === 'outgoing') {
+                            return '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>';
+                        }
+                        return '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>';
+                    }
 
-                        // Format date to ISO 2026-02-20 23:59:59
-                        const formattedDate = formatDateToISO(createDate);
+                    container.innerHTML = sessionList.map(call => {
+                        const caller = (call.caller && call.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.caller) : '-';
+                        const called = (call.called && call.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.called) : '-';
+                        const sessionShort = (call.session_id || '-').split('@')[0];
+                        const callType = call.call_type || '';
+                        const formattedDate = call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-';
 
-                        const icon = callType === 'incoming' ? '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>' : (callType === 'outgoing' ? '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>' : '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>');
-
-                        return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">
-                            <td style="text-align: center;">${icon}</td>
+                        return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">
+                            <td style="text-align: center;">${getCallTypeIcon(callType)}</td>
                             <td>${formattedDate}</td>
                             <td>${caller}</td>
                             <td>${called}</td>
+                            <td>${call.duration || '-'}</td>
                             <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
-                            <td>${session.project || '-'}</td>
-                            <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">View</button></td>
+                            <td>${call.queue_name || '-'}</td>
+                            <td>${call.agent || '-'}</td>
+                            <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">View</button></td>
                         </tr>`;
                     }).join('');
                 } else {
-                    container.innerHTML = '<tr><td colspan="7" class="empty-state">Error loading calls</td></tr>';
+                    container.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading calls</td></tr>';
                 }
             } catch (e) {
                 console.error('Error loading calls:', e);
-                container.innerHTML = '<tr><td colspan="7" class="empty-state">Error loading calls</td></tr>';
+                container.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading calls</td></tr>';
             }
         }
 
@@ -2118,55 +2121,63 @@
             fetch('/api/rlog/sessions?date=' + encodeURIComponent(date))
                 .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        const sessions = data.sessions || {};
-                        let sessionList = Object.values(sessions);
+                if (data.success) {
+                    // Use array directly like /api/history
+                    let sessionList = data.sessions || [];
 
-                        // Filter calls with caller containing a dot
-                        sessionList = sessionList.filter(session => {
-                            const caller = session.caller || '';
-                            return !caller.includes('.');
-                        });
+                    // Filtrer par recherche
+                    const filtered = sessionList.filter(call => {
+                        const caller = (call.caller || '').toLowerCase();
+                        const called = (call.called || '').toLowerCase();
+                        const sessionId = (call.session_id || '').toLowerCase();
+                        const createDate = (call.create_date_iso || '').toLowerCase();
 
-                        // Filtrer par recherche
-                        const filtered = sessionList.filter(session => {
-                            const caller = (session.caller || '').toLowerCase();
-                            const called = (session.called || '').toLowerCase();
-                            const sessionId = (session.id || '').toLowerCase();
-                            const project = (session.project || '').toLowerCase();
-                            const createDate = (session.create_date || '').toLowerCase();
+                        return caller.includes(search) ||
+                            called.includes(search) ||
+                            sessionId.includes(search) ||
+                            createDate.includes(search);
+                    });
 
-                            return caller.includes(search) ||
-                                called.includes(search) ||
-                                sessionId.includes(search) ||
-                                project.includes(search) ||
-                                createDate.includes(search);
-                        });
+                    // Update the title with the number of calls
+                    updateCallsTableTitle(filtered.length);
 
-                        const container = document.getElementById('logs-calls-container');
-                        if (filtered.length === 0) {
-                            container.innerHTML = '<tr><td colspan="6" class="empty-state">No matching calls</td></tr>';
-                        } else {
-                            container.innerHTML = filtered.map(session => {
-                                const createDate = session.create_date || '-';
-                                // Format date to ISO 2026-02-20 23:59:59
-                                const formattedDate = formatDateToISO(createDate);
-                                const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.caller) : '-';
-                                const called = (session.called && session.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.called) : '-';
-                                const sessionShort = (session.id || '-').split('@')[0];
+                    const container = document.getElementById('logs-calls-container');
 
-                                return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">
-                                    <td>${formattedDate}</td>
-                                    <td>${caller}</td>
-                                    <td>${called}</td>
-                                    <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
-                                    <td>${session.project || '-'}</td>
-                                    <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">View</button></td>
-                                </tr>`;
-                            }).join('');
-                        }
+                    if (filtered.length === 0) {
+                        container.innerHTML = '<tr><td colspan="9" class="empty-state">No calls found</td></tr>';
+                        return;
                     }
-                });
+
+                    function getCallTypeIcon(callType) {
+                        if (callType === 'incoming') {
+                            return '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>';
+                        } else if (callType === 'outgoing') {
+                            return '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>';
+                        }
+                        return '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>';
+                    }
+
+                    container.innerHTML = filtered.map(call => {
+                        const caller = (call.caller && call.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.caller) : '-';
+                        const called = (call.called && call.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.called) : '-';
+                        const sessionShort = (call.session_id || '-').split('@')[0];
+                        const callType = call.call_type || '';
+                        const formattedDate = call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-';
+
+                        return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">
+                            <td style="text-align: center;">${getCallTypeIcon(callType)}</td>
+                            <td>${formattedDate}</td>
+                            <td>${caller}</td>
+                            <td>${called}</td>
+                            <td>${call.duration || '-'}</td>
+                            <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
+                            <td>${call.queue_name || '-'}</td>
+                            <td>${call.agent || '-'}</td>
+                            <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">View</button></td>
+                        </tr>`;
+                    }).join('');
+                }
+            });
         }
 
         // Afficher le nombre de sessions dans le titre de la table

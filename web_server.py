@@ -21,7 +21,7 @@ import os
 
 # Import configuration
 from config import MYSQL_CONFIG, FLASK_CONFIG, NFS_CONFIG, LOGGING_CONFIG, SNAPSHOTS_FILE, SSH_CONFIG, CCC_BIN
-from get_users_and_calls import RlogDispatcher
+from get_users_and_calls import RlogDispatcher, parse_french_datetime, format_duration_seconds, format_datetime_iso
 
 # Setup logging based on configuration
 LOG_LEVEL = getattr(logging, LOGGING_CONFIG.get("level", "INFO").upper())
@@ -1048,7 +1048,7 @@ def api_rlog_sessions():
         "-list",
         "-path", "/ccxml",
         "-field", "sessions",
-        "-fields", "row.object_id;row.session_id;row.create_date;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
+        "-fields", "row.object_id;row.session_id;row.create_date;row.terminate_date;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
         "-separator", "|"
     ]
 
@@ -1062,12 +1062,13 @@ def api_rlog_sessions():
             # Incoming call: caller=remote, called=local
             if line.strip() and "|" in line:
                 parts = line.strip().split("|")
-                if len(parts) >= 6:
+                if len(parts) >= 7:
                     object_id = parts[0].strip()
                     session_id = parts[1].strip()
                     create_date = parts[2].strip()
-                    remote = parts[4].strip() if len(parts) > 4 else ""
-                    local = parts[5].strip() if len(parts) > 5 else ""
+                    terminate_date = parts[3].strip() if len(parts) > 3 else ""
+                    remote = parts[5].strip() if len(parts) > 5 else ""
+                    local = parts[6].strip() if len(parts) > 6 else ""
 
                     if session_id and session_id.startswith("session_"):
                         caller_num = ""
@@ -1077,6 +1078,15 @@ def api_rlog_sessions():
                         called_num = ""
                         if local and local != "undefined":
                             called_num = local.replace("tel:", "").replace("sip:", "").split("@")[0]
+
+                        # Calculate duration
+                        duration = "-"
+                        start_dt = parse_french_datetime(create_date)
+                        if start_dt and terminate_date and terminate_date != "undefined":
+                            end_dt = parse_french_datetime(terminate_date)
+                            if end_dt:
+                                duration_secs = int((end_dt - start_dt).total_seconds())
+                                duration = format_duration_seconds(duration_secs)
 
                         sessions[session_id] = {
                             "id": session_id,
@@ -1086,19 +1096,22 @@ def api_rlog_sessions():
                             "caller": caller_num,
                             "called": called_num,
                             "call_type": "incoming",
-                            "create_date": create_date
+                            "create_date": create_date,
+                            "create_date_iso": format_datetime_iso(start_dt) if start_dt else "",
+                            "duration": duration
                         }
 
         elif "|0|" in line and "consistent" in line:
             # Outgoing call: caller=remote, called=local
             if line.strip() and "|" in line:
                 parts = line.strip().split("|")
-                if len(parts) >= 6:
+                if len(parts) >= 7:
                     object_id = parts[0].strip()
                     session_id = parts[1].strip()
                     create_date = parts[2].strip()
-                    remote = parts[4].strip() if len(parts) > 4 else ""
-                    local = parts[5].strip() if len(parts) > 5 else ""
+                    terminate_date = parts[3].strip() if len(parts) > 3 else ""
+                    remote = parts[5].strip() if len(parts) > 5 else ""
+                    local = parts[6].strip() if len(parts) > 6 else ""
 
                     if session_id and session_id.startswith("session_"):
                         caller_num = ""
@@ -1109,6 +1122,15 @@ def api_rlog_sessions():
                         if local and local != "undefined":
                             called_num = local.replace("tel:", "").replace("sip:", "").split("@")[0]
 
+                        # Calculate duration
+                        duration = "-"
+                        start_dt = parse_french_datetime(create_date)
+                        if start_dt and terminate_date and terminate_date != "undefined":
+                            end_dt = parse_french_datetime(terminate_date)
+                            if end_dt:
+                                duration_secs = int((end_dt - start_dt).total_seconds())
+                                duration = format_duration_seconds(duration_secs)
+
                         sessions[session_id] = {
                             "id": session_id,
                             "object_id": object_id,
@@ -1117,13 +1139,29 @@ def api_rlog_sessions():
                             "caller": caller_num,
                             "called": called_num,
                             "call_type": "outgoing",
-                            "create_date": create_date
+                            "create_date": create_date,
+                            "create_date_iso": format_datetime_iso(start_dt) if start_dt else "",
+                            "duration": duration
                         }
+
+    # Convert sessions dict to array like /api/history
+    sessions_list = []
+    for session_id, session_data in sessions.items():
+        sessions_list.append({
+            "session_id": session_data.get("id", session_id),
+            "create_date_iso": session_data.get("create_date", ""),
+            "caller": session_data.get("caller", ""),
+            "called": session_data.get("called", ""),
+            "duration": session_data.get("duration", "-"),
+            "queue_name": "-",
+            "agent": "-",
+            "call_type": session_data.get("call_type", "")
+        })
 
     return jsonify({
         "success": True,
         "date": date,
-        "sessions": sessions,
+        "sessions": sessions_list,
         "port": port
     })
 

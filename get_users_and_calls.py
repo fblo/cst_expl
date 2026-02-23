@@ -332,7 +332,7 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
         "-field",
         "sessions",
         "-fields",
-        "row.create_date;row.session_id;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
+        "row.create_date;row.terminate_date;row.session_id;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
         "-separator",
         "|",
     ]
@@ -350,11 +350,12 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
 
                 parts = [p.strip() for p in line.split("|")]
 
-                if len(parts) >= 5:
+                if len(parts) >= 6:
                     create_date = parts[0]
-                    session_id = parts[1]
-                    remote = parts[3] if len(parts) > 3 else ""
-                    local = parts[4] if len(parts) > 4 else ""
+                    terminate_date = parts[1] if len(parts) > 1 else ""
+                    session_id = parts[2]
+                    remote = parts[4] if len(parts) > 4 else ""
+                    local = parts[5] if len(parts) > 5 else ""
 
                     if not session_id or session_id == "undefined":
                         continue
@@ -367,7 +368,14 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
                     if local and local != "undefined":
                         called = local.replace("tel:", "").replace("sip:", "").split("@")[0]
 
+                    # Calculate duration
+                    duration = "-"
                     start_dt = parse_french_datetime(create_date)
+                    if start_dt and terminate_date and terminate_date != "undefined":
+                        end_dt = parse_french_datetime(terminate_date)
+                        if end_dt:
+                            duration_secs = int((end_dt - start_dt).total_seconds())
+                            duration = format_duration_seconds(duration_secs)
 
                     session_to_info[session_id] = {
                         "session_id": session_id,
@@ -375,6 +383,7 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
                         "caller": caller,
                         "called": called,
                         "create_date": create_date,
+                        "duration": duration,
                         "create_date_iso": format_datetime_iso(start_dt),
                     }
 
@@ -385,11 +394,12 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
 
                 parts = [p.strip() for p in line.split("|")]
 
-                if len(parts) >= 5:
+                if len(parts) >= 6:
                     create_date = parts[0]
-                    session_id = parts[1]
-                    remote = parts[3] if len(parts) > 3 else ""
-                    local = parts[4] if len(parts) > 4 else ""
+                    terminate_date = parts[1] if len(parts) > 1 else ""
+                    session_id = parts[2]
+                    remote = parts[4] if len(parts) > 4 else ""
+                    local = parts[5] if len(parts) > 5 else ""
 
                     if not session_id or session_id == "undefined":
                         continue
@@ -402,7 +412,14 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
                     if local and local != "undefined":
                         called = local.replace("tel:", "").replace("sip:", "").split("@")[0]
 
+                    # Calculate duration
+                    duration = "-"
                     start_dt = parse_french_datetime(create_date)
+                    if start_dt and terminate_date and terminate_date != "undefined":
+                        end_dt = parse_french_datetime(terminate_date)
+                        if end_dt:
+                            duration_secs = int((end_dt - start_dt).total_seconds())
+                            duration = format_duration_seconds(duration_secs)
 
                     session_to_info[session_id] = {
                         "session_id": session_id,
@@ -410,6 +427,7 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
                         "caller": caller,
                         "called": called,
                         "create_date": create_date,
+                        "duration": duration,
                         "create_date_iso": format_datetime_iso(start_dt),
                     }
 
@@ -494,6 +512,7 @@ def get_all_data(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
             call["create_date_iso"] = disp_data.get(
                 "create_date_iso", call.get("create_date_iso", "")
             )
+            call["call_type"] = disp_data.get("call_type", "")
 
     ccxml_calls.sort(key=lambda x: x.get("create_date_iso", ""), reverse=True)
 
