@@ -4,10 +4,11 @@ MySQL queries module
 Handles all database queries
 """
 
+import subprocess
 import mysql.connector
 from typing import List, Dict, Optional
 import logging
-from config import MYSQL_CONFIG
+from config import MYSQL_CONFIG, SSH_CONFIG
 
 logger = logging.getLogger("cccp")
 
@@ -106,3 +107,32 @@ def get_nfs_projects_from_mysql() -> List[str]:
     except Exception as e:
         logger.error(f"MySQL query error: {e}")
         return []
+
+
+def get_ps_hostname_via_ssh(svc_hostname: str) -> Optional[str]:
+    """Get the correct ps_hostname by connecting via SSH and running hostname"""
+    if not svc_hostname:
+        return None
+
+    ssh_cmd = [
+        "sshpass", "-p", SSH_CONFIG["password"],
+        "ssh", "-o", "StrictHostKeyChecking=no",
+        "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+        "-o", "HostKeyAlgorithms=+ssh-rsa",
+        "-o", "KexAlgorithms=+diffie-hellman-group1-sha1",
+        f"{SSH_CONFIG['user']}@{svc_hostname}",
+        "hostname"
+    ]
+
+    try:
+        result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            hostname = result.stdout.strip()
+            logger.info(f"SSH: obtained hostname {hostname} from {svc_hostname}")
+            return hostname
+        else:
+            logger.error(f"SSH error: {result.stderr}")
+    except Exception as e:
+        logger.error(f"SSH connection failed: {e}")
+
+    return None

@@ -116,26 +116,27 @@ def get_hostnames_for_project(project: str) -> List[str]:
         return local_hostnames
 
     # Then check NFS via MySQL
-    from mysql_queries import _get_project_hostname_from_mysql
+    from mysql_queries import _get_project_hostname_from_mysql, get_ps_hostname_via_ssh
     mysql_result = _get_project_hostname_from_mysql(project)
 
     if mysql_result:
-        ps_hostname = mysql_result.get("ps_hostname")
         svc_hostname = mysql_result.get("svc_hostname")
 
-        if ps_hostname:
-            path = get_nfs_log_path(ps_hostname, project)
-            logger.info(f"MySQL for {project}: ps_hostname={ps_hostname}, svc_hostname={svc_hostname}")
-            logger.info(f"NFS path check: {path} (exists: {os.path.exists(path) if path else False})")
-
-            if path and os.path.exists(path):
-                return [ps_hostname]
-            else:
-                if svc_hostname and svc_hostname != ps_hostname:
-                    path2 = get_nfs_log_path(svc_hostname, project)
-                    if path2 and os.path.exists(path2):
-                        logger.info(f"Using svc_hostname {svc_hostname} instead of ps_hostname {ps_hostname}")
-                        return [svc_hostname]
+        # Get correct ps_hostname via SSH
+        if svc_hostname:
+            ps_hostname = get_ps_hostname_via_ssh(svc_hostname)
+            if ps_hostname:
+                logger.info(f"MySQL+SSH for {project}: ps_hostname={ps_hostname} (from SSH to {svc_hostname})")
+                path = get_nfs_log_path(ps_hostname, project)
+                if path and os.path.exists(path):
+                    return [ps_hostname]
+        else:
+            ps_hostname = mysql_result.get("ps_hostname")
+            if ps_hostname:
+                path = get_nfs_log_path(ps_hostname, project)
+                logger.info(f"MySQL for {project}: ps_hostname={ps_hostname}")
+                if path and os.path.exists(path):
+                    return [ps_hostname]
 
     return []
 

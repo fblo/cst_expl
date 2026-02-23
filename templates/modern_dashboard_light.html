@@ -741,6 +741,7 @@
                     <table class="table">
                         <thead>
                             <tr>
+                                <th style="text-align: center;">&#8597;</th>
                                 <th>Start</th>
                                 <th>Caller</th>
                                 <th>Called</th>
@@ -752,7 +753,7 @@
                         </thead>
                         <tbody id="history-container">
                             <tr>
-                                <td colspan="7" class="empty-state">Click "Refresh" to load history</td>
+                                <td colspan="8" class="empty-state">Click "Refresh" to load history</td>
                             </tr>
                         </tbody>
                     </table>
@@ -968,12 +969,22 @@
         function renderHistory(history) {
             const tbody = document.getElementById('history-container');
             if (history.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls in history</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No calls in history</td></tr>';
                 return;
+            }
+
+            function getCallTypeIcon(callType) {
+                if (callType === 'incoming') {
+                    return '<span style="color: #16a34a; font-size: 16px;" title="Appel entrant">&#8595;</span>';
+                } else if (callType === 'outgoing') {
+                    return '<span style="color: #2563eb; font-size: 16px;" title="Appel sortant">&#8593;</span>';
+                }
+                return '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>';
             }
             
             tbody.innerHTML = history.map(call => `
                 <tr style="cursor: pointer;" onclick="openConsole('${call.session_id || ''}')">
+                    <td style="text-align: center;">${getCallTypeIcon(call.call_type)}</td>
                     <td>${call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
                     <td>${call.caller || '-'}</td>
                     <td>${call.called || '-'}</td>

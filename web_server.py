@@ -800,7 +800,7 @@ def api_rlog_search():
                 "-list",
                 "-path", "/ccxml",
                 "-field", "sessions",
-                "-fields", "row.object_id;row.session_id;row.create_date",
+                "-fields", "row.object_id;row.session_id;row.create_date;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
                 "-separator", "|"
             ]
 
@@ -812,16 +812,28 @@ def api_rlog_search():
             for line in result.stdout.strip().split("\n"):
                 if line.strip() and "|" in line:
                     parts = line.strip().split("|")
-                    if len(parts) >= 3:
+                    if len(parts) >= 5:
                         object_id = parts[0].strip()
                         session_id = parts[1].strip()
                         create_date = parts[2].strip()
+                        incoming = parts[3].strip() if len(parts) > 3 else ""
+                        remote = parts[4].strip() if len(parts) > 4 else ""
+                        local = parts[5].strip() if len(parts) > 5 else ""
 
                         sessions_found += 1
 
                         if session_id and session_id.startswith("session_"):
-                            # Get caller/called from session events
-                            caller_num, called_num = _get_session_caller_called(port, object_id)
+                            # Determine call type from incoming field
+                            call_type = "outgoing" if incoming == "0" else ("incoming" if incoming == "1" else "")
+
+                            # Get caller/called from connection fields
+                            caller_num = ""
+                            if remote and remote != "undefined":
+                                caller_num = remote.replace("tel:", "").replace("sip:", "").split("@")[0]
+                            
+                            called_num = ""
+                            if local and local != "undefined":
+                                called_num = local.replace("tel:", "").replace("sip:", "").split("@")[0]
 
                             # Check if search term matches
                             term_lower = search_term.lower()
@@ -851,6 +863,7 @@ def api_rlog_search():
                                     "date": date,
                                     "caller": caller_num,
                                     "called": called_num,
+                                    "call_type": call_type,
                                     "create_date": create_date
                                 })
 
@@ -1024,6 +1037,8 @@ def api_rlog_sessions():
         dispatcher._load_day(day)
         time_mod.sleep(2)
 
+    sessions = {}
+
     cmd = [
         CCC_BIN["report"],
         "-login", "admin",
@@ -1033,47 +1048,77 @@ def api_rlog_sessions():
         "-list",
         "-path", "/ccxml",
         "-field", "sessions",
-        "-fields", "row.object_id;row.session_id;row.create_date;row.caller_num;row.called_num;row.caller;row.called",
+        "-fields", "row.object_id;row.session_id;row.create_date;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
         "-separator", "|"
     ]
 
-    result = subprocess.run(cmd, capture_output=True, encoding="latin-1", timeout=10)
+    result = subprocess.run(cmd, capture_output=True, encoding="latin-1", timeout=60)
 
-    logger.info(f"Dispatch query result: stdout={result.stdout[:500] if result.stdout else 'empty'}")
+    dispatch_info = _dispatch_info.get(port, {})
+    project = dispatch_info.get("project", "")
 
-    sessions = {}
     for line in result.stdout.strip().split("\n"):
-        if line.strip() and "|" in line:
-            parts = line.strip().split("|")
+        if "|1|" in line:
+            # Incoming call: caller=remote, called=local
+            if line.strip() and "|" in line:
+                parts = line.strip().split("|")
+                if len(parts) >= 6:
+                    object_id = parts[0].strip()
+                    session_id = parts[1].strip()
+                    create_date = parts[2].strip()
+                    remote = parts[4].strip() if len(parts) > 4 else ""
+                    local = parts[5].strip() if len(parts) > 5 else ""
 
-            if len(parts) >= 3:
-                object_id = parts[0].strip()
-                session_id = parts[1].strip()
-                create_date = parts[2].strip()
+                    if session_id and session_id.startswith("session_"):
+                        caller_num = ""
+                        if remote and remote != "undefined":
+                            caller_num = remote.replace("tel:", "").replace("sip:", "").split("@")[0]
 
-                if session_id and session_id.startswith("session_"):
-                    # Get caller/called from session events
-                    caller_num, called_num = _get_session_caller_called(port, object_id)
+                        called_num = ""
+                        if local and local != "undefined":
+                            called_num = local.replace("tel:", "").replace("sip:", "").split("@")[0]
 
-                    # Also check raw fields as fallback
-                    if not caller_num and len(parts) >= 4 and parts[3].strip() and parts[3].strip().lower() != "undefined":
-                        caller_num = parts[3].strip()
-                    if not called_num and len(parts) >= 5 and parts[4].strip() and parts[4].strip().lower() != "undefined":
-                        called_num = parts[4].strip()
+                        sessions[session_id] = {
+                            "id": session_id,
+                            "object_id": object_id,
+                            "type": "call_session",
+                            "project": project,
+                            "caller": caller_num,
+                            "called": called_num,
+                            "call_type": "incoming",
+                            "create_date": create_date
+                        }
 
-                    # Get project from dispatch info
-                    dispatch_info = _dispatch_info.get(port, {})
-                    project = dispatch_info.get("project", "")
+        elif "|0|" in line and "consistent" in line:
+            # Outgoing call: caller=remote, called=local
+            if line.strip() and "|" in line:
+                parts = line.strip().split("|")
+                if len(parts) >= 6:
+                    object_id = parts[0].strip()
+                    session_id = parts[1].strip()
+                    create_date = parts[2].strip()
+                    remote = parts[4].strip() if len(parts) > 4 else ""
+                    local = parts[5].strip() if len(parts) > 5 else ""
 
-                    sessions[session_id] = {
-                        "id": session_id,
-                        "object_id": object_id,
-                        "type": "call_session",
-                        "project": project,
-                        "caller": caller_num,
-                        "called": called_num,
-                        "create_date": create_date
-                    }
+                    if session_id and session_id.startswith("session_"):
+                        caller_num = ""
+                        if remote and remote != "undefined":
+                            caller_num = remote.replace("tel:", "").replace("sip:", "").split("@")[0]
+
+                        called_num = ""
+                        if local and local != "undefined":
+                            called_num = local.replace("tel:", "").replace("sip:", "").split("@")[0]
+
+                        sessions[session_id] = {
+                            "id": session_id,
+                            "object_id": object_id,
+                            "type": "call_session",
+                            "project": project,
+                            "caller": caller_num,
+                            "called": called_num,
+                            "call_type": "outgoing",
+                            "create_date": create_date
+                        }
 
     return jsonify({
         "success": True,
@@ -1083,8 +1128,8 @@ def api_rlog_sessions():
     })
 
 
-def _get_session_caller_called(port: int, object_id: str) -> tuple:
-    """Extract caller and called numbers from session events"""
+def _get_all_session_caller_called(port: int) -> dict:
+    """Get caller/called for all sessions in one query (optimized)"""
     try:
         cmd = [
             CCC_BIN["report"],
@@ -1093,91 +1138,53 @@ def _get_session_caller_called(port: int, object_id: str) -> tuple:
             "-server", "127.0.0.1",
             str(port),
             "-list",
-            "-path", "/dispatch",
-            "-field", "events",
-            "-fields", "row.name;row.string_data",
-            "-object", object_id,
+            "-path", "/ccxml",
+            "-field", "sessions",
+            "-fields", "row.object_id;row.session_id;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
             "-separator", "|"
         ]
 
-        result = subprocess.run(cmd, capture_output=True, encoding="latin-1", timeout=5)
+        result = subprocess.run(cmd, capture_output=True, encoding="latin-1", timeout=60)
 
-        caller = ""
-        called = ""
-        phones_found = []  # List of (event_name, phone_number)
-
+        session_info = {}
         for line in result.stdout.strip().split("\n"):
-            if line.strip() and "|" in line:
-                parts = line.strip().split("|")
-                if len(parts) >= 2:
-                    event_name = parts[0].strip() if parts[0].strip() else ""
-                    string_data = parts[1].strip() if len(parts) > 1 and parts[1].strip() else ""
+            if not line.strip() or "|" not in line:
+                continue
 
-                    # Extract phone numbers from string_data
-                    import re
-                    phone_pattern = r'(?:00\d{2}|\+?\d{1,3}[-.\s]?)?\d{2}[-.\s]?\d{2}[-.\s]?\d{2}[-.\s]?\d{2}'
-                    phones = re.findall(phone_pattern, string_data)
+            parts = line.strip().split("|")
+            if len(parts) >= 5:
+                object_id = parts[0].strip()
+                session_id = parts[1].strip()
+                incoming = parts[2].strip() if len(parts) > 2 else ""
+                remote = parts[3].strip() if len(parts) > 3 else ""
+                local = parts[4].strip() if len(parts) > 4 else ""
 
-                    for p in phones:
-                        normalized = p.lstrip('00').replace('-', '').replace('.', '').replace(' ', '')
-                        # Filter out too short numbers or obvious non-phone numbers
-                        if len(normalized) >= 8 and normalized.isdigit():
-                            phones_found.append((event_name, p))
+                if not session_id or session_id.startswith("session_") is False:
+                    continue
 
-        # Analyze events to determine caller/called
-        outcall_phones = []  # Outgoing calls - these are typically the caller
-        incall_phones = []   # Incoming calls - these are typically the called
-        ccxml_loaded_phones = []  # ccxml.loaded - contains caller (ANI/CLI)
-        connection_alerting_phones = []  # connection.alerting - contains called (DNIS)
-        other_phones = []
+                call_type = "outgoing" if incoming == "0" else ("incoming" if incoming == "1" else "")
 
-        for event_name, phone in phones_found:
-            event_lower = event_name.lower()
-            if 'outcall' in event_lower:
-                outcall_phones.append(phone)
-            elif 'incall' in event_lower:
-                incall_phones.append(phone)
-            elif 'ccxml.loaded' in event_lower:
-                ccxml_loaded_phones.append(phone)
-            elif 'connection.alerting' in event_lower:
-                connection_alerting_phones.append(phone)
-            else:
-                other_phones.append((event_name, phone))
+                caller = ""
+                if remote and remote != "undefined":
+                    caller = remote.replace("tel:", "").replace("sip:", "").split("@")[0]
 
-        # Priority order for caller:
-        # 1. ccxml.loaded - contains the calling number (ANI/CLI)
-        # 2. OutCall events
-        # 3. Other events with valid phone numbers
-        if ccxml_loaded_phones:
-            caller = ccxml_loaded_phones[0]
-        elif outcall_phones:
-            caller = outcall_phones[0]
-        elif other_phones:
-            for event_name, phone in other_phones:
-                if len(phone) >= 8:
-                    caller = phone
-                    break
+                called = ""
+                if local and local != "undefined":
+                    called = local.replace("tel:", "").replace("sip:", "").split("@")[0]
 
-        # Priority order for called:
-        # 1. connection.alerting - contains the called number (DNIS)
-        # 2. INCall events
-        # 3. Other events with valid phone numbers (different from caller)
-        if connection_alerting_phones:
-            called = connection_alerting_phones[0]
-        elif incall_phones:
-            called = incall_phones[0]
-        elif other_phones:
-            for event_name, phone in other_phones:
-                if len(phone) >= 8 and phone != caller:
-                    called = phone
-                    break
+                session_info[object_id] = {
+                    "session_id": session_id,
+                    "caller": caller,
+                    "called": called,
+                    "call_type": call_type
+                }
 
-        logger.info(f"_get_session_caller_called: object_id={object_id}, phones={phones_found[:5]}, caller={caller}, called={called}")
-        return caller, called
+        logger.info(f"_get_all_session_caller_called: fetched {len(session_info)} sessions from port {port}")
+        return session_info
 
     except Exception as e:
-        logger.warning(f"Failed to get caller/called for session {object_id}: {e}")
-        return "", ""
+        logger.warning(f"Failed to get all sessions caller/called for port {port}: {e}")
+        return {}
 
 
 @app.route("/api/rlog/session/detail", methods=["GET"])

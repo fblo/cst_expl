@@ -808,6 +808,7 @@
                     <table class="table">
                         <thead>
                             <tr>
+                                <th style="text-align: center;">&#8597;</th>
                                 <th>Start</th>
                                 <th>Caller</th>
                                 <th>Called</th>
@@ -819,7 +820,7 @@
                         </thead>
                         <tbody id="history-container">
                             <tr>
-                                <td colspan="7" class="empty-state">Click "Refresh" to load history</td>
+                                <td colspan="8" class="empty-state">Click "Refresh" to load history</td>
                             </tr>
                         </tbody>
                     </table>
@@ -899,6 +900,7 @@
                         <table class="table">
                             <thead>
                                 <tr>
+                                    <th style="text-align: center;">&#8597;</th>
                                     <th>Start</th>
                                     <th>Caller</th>
                                     <th>Called</th>
@@ -909,7 +911,7 @@
                             </thead>
                             <tbody id="logs-calls-container">
                                 <tr>
-                                    <td colspan="6" class="empty-state">Select a project and date, then click "Retrieve & Load"</td>
+                                    <td colspan="7" class="empty-state">Select a project and date, then click "Retrieve & Load"</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1250,12 +1252,22 @@
         function renderHistory(history) {
             const tbody = document.getElementById('history-container');
             if (history.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls in history</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No calls in history</td></tr>';
                 return;
+            }
+
+            function getCallTypeIcon(callType) {
+                if (callType === 'incoming') {
+                    return '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>'; // Arrow down
+                } else if (callType === 'outgoing') {
+                    return '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>'; // Arrow up
+                }
+                return '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>'; // Em dash
             }
 
             tbody.innerHTML = history.map(call => `
                 <tr style="cursor: pointer;" onclick="openConsole('${call.session_id || ''}')">
+                    <td style="text-align: center;">${getCallTypeIcon(call.call_type)}</td>
                     <td>${call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-'}</td>
                     <td>${removePhonePrefixes(call.caller || '-')}</td>
                     <td>${removePhonePrefixes(call.called || '-')}</td>
@@ -2002,7 +2014,7 @@
             const container = document.getElementById('logs-calls-container');
 
             if (!date) {
-                container.innerHTML = '<tr><td colspan="6" class="empty-state">Select a date first</td></tr>';
+                container.innerHTML = '<tr><td colspan="7" class="empty-state">Select a date first</td></tr>';
                 return;
             }
 
@@ -2031,7 +2043,7 @@
                     updateCallsTableTitle(sessionList.length);
 
                     if (sessionList.length === 0) {
-                        container.innerHTML = '<tr><td colspan="6" class="empty-state">No calls found</td></tr>';
+                        container.innerHTML = '<tr><td colspan="7" class="empty-state">No calls found</td></tr>';
                         return;
                     }
 
@@ -2040,11 +2052,15 @@
                         const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.caller) : '-';
                         const called = (session.called && session.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(session.called) : '-';
                         const sessionShort = (session.id || '-').split('@')[0];
+                        const callType = session.call_type || '';
 
                         // Format date to ISO 2026-02-20 23:59:59
                         const formattedDate = formatDateToISO(createDate);
 
+                        const icon = callType === 'incoming' ? '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>' : (callType === 'outgoing' ? '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>' : '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>');
+
                         return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(session.id || '')}', '${date}')">
+                            <td style="text-align: center;">${icon}</td>
                             <td>${formattedDate}</td>
                             <td>${caller}</td>
                             <td>${called}</td>
@@ -2054,11 +2070,11 @@
                         </tr>`;
                     }).join('');
                 } else {
-                    container.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading calls</td></tr>';
+                    container.innerHTML = '<tr><td colspan="7" class="empty-state">Error loading calls</td></tr>';
                 }
             } catch (e) {
                 console.error('Error loading calls:', e);
-                container.innerHTML = '<tr><td colspan="6" class="empty-state">Error loading calls</td></tr>';
+                container.innerHTML = '<tr><td colspan="7" class="empty-state">Error loading calls</td></tr>';
             }
         }
 

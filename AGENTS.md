@@ -17,6 +17,14 @@ CCCP Explorer est un dashboard web basé sur Flask qui se connecte aux serveurs 
 # Installer les dépendances
 pip3 install -r requirements.txt
 
+# Vérifier la syntaxe Python (lint de base)
+python3 -m py_compile web_server.py
+python3 -m py_compile get_users_and_calls.py
+python3 -m py_compile config.py
+
+# Vérification de types (optionnel, nécessite mypy)
+pip3 install mypy && mypy web_server.py get_users_and_calls.py config.py
+
 # Lancer l'application
 python3 web_server.py
 
@@ -152,19 +160,35 @@ curl http://localhost:5000/api/status
 
 ## Tests
 
-Ce projet n'a pas encore de suite de tests formelle. Quand vous ajoutez des tests :
+Le projet utilise des tests unitaires avec pytest pour la logique métier.
+
+### Exécuter les tests
+```bash
+# Installer pytest (si pas encore installé)
+pip3 install pytest
+
+# Lancer tous les tests
+python3 -m pytest tests/
+
+# Lancer un test spécifique
+python3 -m pytest tests/test_fichier.py::ClasseDeTest::test_methode
+
+# Lancer un fichier de test directement
+python3 test_call_recovery.py
+```
+
+### Écrire des tests
 - Utiliser `pytest` comme framework de test
-- Placer les tests dans un répertoire `tests/` à la racine
+- Placer les tests dans le répertoire `tests/` à la racine
 - Nom des fichiers de test : `test_*.py` ou `*_test.py`
-- Lancer tous les tests : `python3 -m pytest tests/`
-- Lancer un test unique : `python3 -m pytest tests/test_fichier.py::ClasseDeTest::test_methode`
 - Simuler les dépendances externes (MySQL, serveur CCCP) pour les tests unitaires
 - Viser une couverture significative de la logique métier dans `get_users_and_calls.py`
 
 ## Notes Supplémentaires
 
 - Le code source utilise des commentaires/docstrings en français ; maintenir la cohérence
-- Le binaire `ccenter_report` est un outil propriétaire pour la communication CCCP
+- Le binaire `cccenter_report` est un outil propriétaire pour la communication CCCP
 - Le projet tourne sur Python 3.8+ ; pas de compatibilité Python 2 nécessaire
 - Pas de linting formel configuré ; utiliser `python3 -m py_compile` pour vérifier la syntaxe
-- Pour la vérification de types, installer mypy : `pip3 install mypy && mypy .`
+- Pour la vérification de types, installer mypy : `pip3 install mypy && mypy web_server.py get_users_and_calls.py config.py`
+- Le fichier de test `test_call_recovery.py` peut être lancé directement avec `python3 test_call_recovery.py`

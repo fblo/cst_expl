@@ -312,7 +312,7 @@ def get_ccxml_sessions(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
 
 
 def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
-    """Fetch call details from dispatch (ALL sessions)"""
+    """Fetch call details from ccxml (ALL sessions)"""
     if not host:
         print("No host specified, skipping get_dispatch_calls", file=sys.stderr)
         return {}
@@ -320,19 +320,19 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
     cmd = [
         CCC_BIN["report"],
         "-login",
-        "supervisor_stho",
+        "admin",
         "-password",
-        "toto",
+        "admin",
         "-server",
         host,
         str(port),
         "-list",
         "-path",
-        "/dispatch",
+        "/ccxml",
         "-field",
         "sessions",
         "-fields",
-        "row.session_id;row.object_id;row.create_date;row.terminate_date;row.session_type;row.queue_name;row.tasks.last.queue_name;row.tasks.last.manager_user_id;row.connections.first.remote_address;row.connections.last.local_address",
+        "row.create_date;row.session_id;row.connections.last.incoming;row.connections.last.remote_address;row.connections.last.local_address",
         "-separator",
         "|",
     ]
@@ -341,64 +341,82 @@ def get_dispatch_calls(host=DEFAULT_IP, port=DEFAULT_DISPATCH_PORT):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
         session_to_info = {}
+
         for line in result.stdout.strip().split("\n"):
-            if not line or "|" not in line:
-                continue
-
-            parts = [p.strip() for p in line.split("|")]
-
-            if len(parts) >= 10:
-                session_id = parts[0]
-                object_id = parts[1]
-                create_date = parts[2]
-                terminate_date = parts[3]
-                session_type = parts[4]
-                queue_name = parts[5] if parts[5] != "undefined" else ""
-                queue_name_alt = (
-                    parts[6] if len(parts) > 6 and parts[6] != "undefined" else ""
-                )
-                agent = parts[7] if len(parts) > 7 and parts[7] != "undefined" else ""
-                remote = parts[8] if len(parts) > 8 else ""
-                local = parts[9] if len(parts) > 9 else ""
-
-                if not queue_name:
-                    queue_name = queue_name_alt
-
-                if object_id == "undefined" or not object_id:
+            if "|1|" in line:
+                # Incoming call: caller=remote, called=local
+                if not line or "|" not in line:
                     continue
 
-                caller = ""
-                if remote and remote != "undefined":
-                    caller = remote.replace("sip:", "").split("@")[0]
+                parts = [p.strip() for p in line.split("|")]
 
-                called = ""
-                if local and local != "undefined":
-                    called = local.replace("sip:", "").split("@")[0]
+                if len(parts) >= 5:
+                    create_date = parts[0]
+                    session_id = parts[1]
+                    remote = parts[3] if len(parts) > 3 else ""
+                    local = parts[4] if len(parts) > 4 else ""
 
-                duration = "-"
-                start_dt = parse_french_datetime(create_date)
-                if start_dt and terminate_date and terminate_date != "undefined":
-                    end_dt = parse_french_datetime(terminate_date)
-                    if end_dt:
-                        duration_secs = int((end_dt - start_dt).total_seconds())
-                        duration = format_duration_seconds(duration_secs)
+                    if not session_id or session_id == "undefined":
+                        continue
 
-                session_to_info[session_id] = {
-                    "object_id": object_id,
-                    "session_type": session_type,
-                    "queue_name": queue_name if queue_name else "-",
-                    "agent": agent if agent else "-",
-                    "caller": caller,
-                    "called": called,
-                    "duration": duration,
-                    "create_date": create_date,
-                    "create_date_iso": format_datetime_iso(start_dt),
-                }
+                    caller = ""
+                    if remote and remote != "undefined":
+                        caller = remote.replace("tel:", "").replace("sip:", "").split("@")[0]
+
+                    called = ""
+                    if local and local != "undefined":
+                        called = local.replace("tel:", "").replace("sip:", "").split("@")[0]
+
+                    start_dt = parse_french_datetime(create_date)
+
+                    session_to_info[session_id] = {
+                        "session_id": session_id,
+                        "call_type": "incoming",
+                        "caller": caller,
+                        "called": called,
+                        "create_date": create_date,
+                        "create_date_iso": format_datetime_iso(start_dt),
+                    }
+
+            elif "|0|" in line and "consistent" in line:
+                # Outgoing call: caller=remote, called=local
+                if not line or "|" not in line:
+                    continue
+
+                parts = [p.strip() for p in line.split("|")]
+
+                if len(parts) >= 5:
+                    create_date = parts[0]
+                    session_id = parts[1]
+                    remote = parts[3] if len(parts) > 3 else ""
+                    local = parts[4] if len(parts) > 4 else ""
+
+                    if not session_id or session_id == "undefined":
+                        continue
+
+                    caller = ""
+                    if remote and remote != "undefined":
+                        caller = remote.replace("tel:", "").replace("sip:", "").split("@")[0]
+
+                    called = ""
+                    if local and local != "undefined":
+                        called = local.replace("tel:", "").replace("sip:", "").split("@")[0]
+
+                    start_dt = parse_french_datetime(create_date)
+
+                    session_to_info[session_id] = {
+                        "session_id": session_id,
+                        "call_type": "outgoing",
+                        "caller": caller,
+                        "called": called,
+                        "create_date": create_date,
+                        "create_date_iso": format_datetime_iso(start_dt),
+                    }
 
         return session_to_info
 
     except Exception as e:
-        print(f"Dispatch error: {e}", file=sys.stderr)
+        print(f"CCXML error: {e}", file=sys.stderr)
 
     return {}
 
