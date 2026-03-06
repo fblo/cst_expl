@@ -263,16 +263,16 @@ def get_servers_from_mysql():
     """Fetch servers from MySQL database"""
     query = """
         SELECT
-            p.name AS project, 
-            v.cccip, 
-            g.ccc_dispatch_port, 
+            p.name AS project,
+            v.cccip,
+            g.ccc_dispatch_port,
             g.ccc_proxy_port,
             v.vocalnode AS vocal_node
-        FROM 
+        FROM
             interactivportal.Global_referential g
-        JOIN 
+        JOIN
             interactivportal.Projects p ON g.customer_id = p.id
-        JOIN 
+        JOIN
             interactivdbmaster.master_vocalnodes v ON g.cst_node = v.vocalnode
     """
     try:
@@ -284,7 +284,7 @@ def get_servers_from_mysql():
         conn.close()
         return results
     except Exception as e:
-        logger.error(f"MySQL error: {e}")
+        logger.warning(f"MySQL unavailable: {e}")
         return []
 
 
@@ -963,6 +963,8 @@ def api_rlog_sessions():
     import socket
 
     date = request.args.get("date", "")
+    hour_str = request.args.get("hour", "")
+    hour = int(hour_str) if hour_str not in ("", None) else None
 
     if not date:
         return jsonify({"success": False, "error": "date required"}), 400
@@ -977,7 +979,7 @@ def api_rlog_sessions():
         RlogDispatcher.reset()
 
         logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_logs")
-        dispatcher = RlogDispatcher(logs_dir)
+        dispatcher = RlogDispatcher(logs_dir, hour=hour)
 
         new_port = None
         for port_candidate in range(35000, 35200):
@@ -1149,7 +1151,7 @@ def api_rlog_sessions():
     for session_id, session_data in sessions.items():
         sessions_list.append({
             "session_id": session_data.get("id", session_id),
-            "create_date_iso": session_data.get("create_date", ""),
+            "create_date_iso": session_data.get("create_date_iso", ""),
             "caller": session_data.get("caller", ""),
             "called": session_data.get("called", ""),
             "duration": session_data.get("duration", "-"),
@@ -1161,6 +1163,7 @@ def api_rlog_sessions():
     return jsonify({
         "success": True,
         "date": date,
+        "hour": hour,
         "sessions": sessions_list,
         "port": port
     })
@@ -1772,6 +1775,8 @@ def api_logs_retrieve():
     data = request.json
     project = data.get("project", "")
     date = data.get("date", "")
+    hour = data.get("hour", "")
+    hour = int(hour) if hour not in ("", None) else None
     
     if not project or not date:
         return jsonify({"success": False, "error": "project and date required"}), 400
@@ -1779,11 +1784,13 @@ def api_logs_retrieve():
     job_id = str(uuid.uuid4())
     target_dir = os.path.dirname(os.path.abspath(__file__))
     
+    hour_info = f" (hour {hour})" if hour is not None else ""
     _log_retrieval_jobs[job_id] = {
         "status": "starting",
-        "progress": "Looking up hostname for " + project + "...",
+        "progress": "Looking up hostname for " + project + hour_info + "...",
         "project": project,
         "date": date,
+        "hour": hour,
         "created_at": time.time(),
         "copied": 0,
         "total_files": 0,
@@ -1791,14 +1798,15 @@ def api_logs_retrieve():
         "error": None
     }
     
-    _job_executor.submit(run_log_retrieval_job, job_id, project, date, target_dir)
+    _job_executor.submit(run_log_retrieval_job, job_id, project, date, target_dir, hour)
     
     return jsonify({
         "success": True,
         "job_id": job_id,
         "status": "starting",
         "project": project,
-        "date": date
+        "date": date,
+        "hour": hour
     })
 
 
@@ -1912,18 +1920,37 @@ def api_logs_snapshot_detail(project, date):
 @app.route("/api/logs/snapshots/<project>/<date>", methods=["DELETE"])
 def api_logs_snapshot_delete(project, date):
     """Delete a specific snapshot"""
-    key = f"{project}_{date}"
+    # Check for hour in query params
+    hour_str = request.args.get("hour", "")
+    hour = int(hour_str) if hour_str and hour_str != "null" else None
+    
+    if hour is not None:
+        key = f"{project}_{date}_{hour:02d}"
+    else:
+        key = f"{project}_{date}"
 
     if key not in _log_snapshots:
-        return jsonify({"success": False, "error": f"Snapshot not found for {project} on {date}"}), 404
+        return jsonify({"success": False, "error": f"Snapshot not found for {key}"}), 404
 
-    snapshot = _log_snapshots.pop(key)
+    snapshot = _log_snapshots[key]
+    directory = snapshot.get("directory")
+    
+    # Delete the log directory if it exists
+    if directory and os.path.exists(directory):
+        try:
+            import shutil
+            shutil.rmtree(directory)
+            logger.info(f"Deleted log directory: {directory}")
+        except Exception as e:
+            logger.warning(f"Could not delete directory {directory}: {e}")
+    
+    del _log_snapshots[key]
     logger.info(f"Deleted log snapshot: {key}")
     save_snapshots_to_disk()
 
     return jsonify({
         "success": True,
-        "message": f"Snapshot deleted for {project} on {date}"
+        "message": f"Snapshot deleted for {key}"
     })
 
 

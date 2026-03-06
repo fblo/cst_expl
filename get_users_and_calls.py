@@ -654,20 +654,25 @@ class RlogDispatcher:
     _instance = None
     _logs_dir = None
     
-    def __new__(cls, logs_dir: str = None):
-        if cls._instance is not None and (logs_dir is None or logs_dir == cls._logs_dir):
+    def __new__(cls, logs_dir: str = None, hour: int = None):
+        # Check if we can reuse existing instance
+        if cls._instance is not None and logs_dir == cls._logs_dir:
+            # Update hour if provided
+            if hour is not None:
+                cls._instance.hour = hour
             return cls._instance
         
         instance = super().__new__(cls)
         instance._initialized = False
         return instance
     
-    def __init__(self, logs_dir: str = None):
+    def __init__(self, logs_dir: str = None, hour: int = None):
         if self._initialized and logs_dir == self._logs_dir:
             return
         
         self.logs_dir = logs_dir or self._logs_dir or "/opt/debug"
         self._logs_dir = self.logs_dir
+        self.hour = hour
         self.port: Optional[int] = None
         self.process: Optional[subprocess.Popen] = None
         self._loaded_days: set = set()
@@ -737,8 +742,31 @@ class RlogDispatcher:
         # Create structure and copy logs
         os.makedirs(project_logger_dir, exist_ok=True)
 
+        # Filter log files by hour if specified
+        hours_to_load = []
+        if self.hour is not None:
+            h = self.hour
+            # hour-2 to hour (3 hours)
+            for hour_val in range(h - 2, h + 1):
+                if 0 <= hour_val <= 23:
+                    hours_to_load.append(hour_val)
+            print(f"Filtering logs for hour {h} (loading hours: {hours_to_load})", file=sys.stderr)
+
         # Copy log files from import_logs (flat directory)
-        log_files = glob.glob(os.path.join(import_logs_dir, "log_*.log"))
+        all_log_files = glob.glob(os.path.join(import_logs_dir, "log_*.log"))
+        
+        # Filter by hour if specified
+        if hours_to_load:
+            log_files = []
+            for lf in all_log_files:
+                basename = os.path.basename(lf)
+                for h in hours_to_load:
+                    if f"_{h:02d}_" in basename:
+                        log_files.append(lf)
+                        break
+        else:
+            log_files = all_log_files
+
         for log_file in log_files:
             try:
                 import shutil

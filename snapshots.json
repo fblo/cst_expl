@@ -1,18 +1,20 @@
 {
-  "ARTELIA_2026-02-20": {
-    "project": "ARTELIA",
-    "date": "2026-02-20",
-    "port": 35011,
-    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/ARTELIA_2026-02-20",
-    "created_at": 1771879766.6169713,
-    "files_count": 24
-  },
-  "KEYYO_2026-02-20": {
+  "KEYYO_2026-02-24_11": {
     "project": "KEYYO",
-    "date": "2026-02-20",
-    "port": 35015,
-    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/KEYYO_2026-02-20",
-    "created_at": 1771882207.430438,
+    "date": "2026-02-24",
+    "hour": 11,
+    "port": 35008,
+    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/KEYYO_2026-02-24",
+    "created_at": 1772481568.7937431,
+    "files_count": 3
+  },
+  "KEYYO_2026-03-05": {
+    "project": "KEYYO",
+    "date": "2026-03-05",
+    "hour": null,
+    "port": 35000,
+    "directory": "/home/fblo/Documents/repos/cst_expl/import_logs/KEYYO_2026-03-05",
+    "created_at": 1772778654.9149714,
     "files_count": 24
   }
 }

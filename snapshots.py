@@ -41,33 +41,51 @@ def save_snapshots_to_disk():
         logger.error(f"Failed to save snapshots: {e}")
 
 
-def get_log_snapshot(project: str, date: str) -> Optional[dict]:
+def get_log_snapshot(project: str, date: str, hour: int = None) -> Optional[dict]:
     """Get a log snapshot for a specific project and date"""
-    key = f"{project}_{date}"
+    if hour is not None:
+        key = f"{project}_{date}_{hour:02d}"
+    else:
+        key = f"{project}_{date}"
     return _log_snapshots.get(key)
 
 
-def save_log_snapshot(project: str, date: str, port: int, directory: str, files_count: int):
+def save_log_snapshot(project: str, date: str, port: int, directory: str, files_count: int, hour: int = None):
     """Save a log snapshot"""
-    key = f"{project}_{date}"
+    if hour is not None:
+        key = f"{project}_{date}_{hour:02d}"
+    else:
+        key = f"{project}_{date}"
     import time as time_mod
     _log_snapshots[key] = {
         "project": project,
         "date": date,
+        "hour": hour,
         "port": port,
         "directory": directory,
         "created_at": time_mod.time(),
         "files_count": files_count
     }
-    logger.info(f"Saved log snapshot: {key} (port={port}, files={files_count})")
+    logger.info(f"Saved log snapshot: {key} (port={port}, files={files_count}, hour={hour})")
     save_snapshots_to_disk()
 
 
 def delete_log_snapshot(key: str) -> bool:
     """Delete a snapshot by key, returns True if deleted"""
+    import shutil
     if key in _log_snapshots:
+        snapshot = _log_snapshots[key]
+        directory = snapshot.get("directory")
+        # Delete the log directory
+        if directory and os.path.exists(directory):
+            try:
+                shutil.rmtree(directory)
+                logger.info(f"Deleted log directory: {directory}")
+            except Exception as e:
+                logger.warning(f"Could not delete directory {directory}: {e}")
         del _log_snapshots[key]
         logger.info(f"Deleted log snapshot: {key}")
+        save_snapshots_to_disk()
         return True
     return False
 
@@ -100,11 +118,12 @@ def get_all_snapshots():
             "key": key,
             "project": snapshot.get("project"),
             "date": snapshot.get("date"),
+            "hour": snapshot.get("hour"),
             "port": snapshot.get("port"),
             "directory": snapshot.get("directory"),
             "files_count": snapshot.get("files_count"),
             "age_seconds": age,
             "created_at": snapshot.get("created_at")
         })
-    snapshots.sort(key=lambda x: x.get("date", ""), reverse=True)
+    snapshots.sort(key=lambda x: (x.get("date", ""), x.get("hour") or 0), reverse=True)
     return snapshots

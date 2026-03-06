@@ -9,7 +9,7 @@
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
     <style>
         * {
-            margin: 0;
+            margin: 2px;
             padding: 0;
             box-sizing: border-box;
         }
@@ -856,6 +856,33 @@
                                         </div>
                                         <input type="date" id="logs-date"
                                             style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px; margin-top: 4px;">
+                                        <select id="logs-hour" style="width:100%; padding:8px 12px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:13px; margin-top: 8px;">
+                                            <option value="">All hours</option>
+                                            <option value="0">00h</option>
+                                            <option value="1">01h</option>
+                                            <option value="2">02h</option>
+                                            <option value="3">03h</option>
+                                            <option value="4">04h</option>
+                                            <option value="5">05h</option>
+                                            <option value="6">06h</option>
+                                            <option value="7">07h</option>
+                                            <option value="8">08h</option>
+                                            <option value="9">09h</option>
+                                            <option value="10">10h</option>
+                                            <option value="11">11h</option>
+                                            <option value="12">12h</option>
+                                            <option value="13">13h</option>
+                                            <option value="14">14h</option>
+                                            <option value="15">15h</option>
+                                            <option value="16">16h</option>
+                                            <option value="17">17h</option>
+                                            <option value="18">18h</option>
+                                            <option value="19">19h</option>
+                                            <option value="20">20h</option>
+                                            <option value="21">21h</option>
+                                            <option value="22">22h</option>
+                                            <option value="23">23h</option>
+                                        </select>
                                     </div>
                                     <button class="btn btn-primary" onclick="retrieveLogs()" id="btn-retrieve" style="width:100%; white-space: nowrap;">
                                         📥 Retrieve & Load
@@ -1318,10 +1345,16 @@
 
         let allRlog = [];
         let rlogData = null;
-
+        
+        // Pagination for Calls
+        let callsPageSize = 200;
+        let callsCurrentPage = 1;
+        let callsData = [];
+        
         async function loadSessions() {
             console.log('[LogsExplorer] loadSessions called');
             const date = document.getElementById('logs-date').value;
+            const hour = document.getElementById('logs-hour') ? document.getElementById('logs-hour').value : '';
             if (!date) {
                 console.log('[LogsExplorer] No date selected');
                 document.getElementById('logs-sessions-list').innerHTML = '<div class="empty-state">Select a date first</div>';
@@ -1336,8 +1369,12 @@
             window.logsSearchTerm = '';
 
             console.log('[LogsExplorer] Loading sessions for date:', date);
+            let url = '/api/rlog/sessions?date=' + encodeURIComponent(date);
+            if (hour) {
+                url += '&hour=' + encodeURIComponent(hour);
+            }
             try {
-                const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
+                const response = await fetch(url);
                 const data = await response.json();
                 console.log('[LogsExplorer] Sessions data:', data);
 
@@ -1398,7 +1435,7 @@
                     const type = session.type || 'call';
                     const caller = (session.caller && session.caller.toLowerCase() !== 'undefined') ? session.caller : '-';
                     const called = (session.called && session.called.toLowerCase() !== 'undefined') ? session.called : '-';
-                    const createDate = session.create_date || '-';
+                    const createDate = session.create_date_iso ? session.create_date_iso.substring(0, 16).replace('T', ' ') : '-';
                     const project = session.project || '-';
 
                     const showPhones = caller !== '-' || called !== '-';
@@ -1517,12 +1554,20 @@
             }
 
             container.innerHTML = snapshots.map(s => {
-                const name = `${s.project}_${s.date}`;
+                const hourStr = s.hour !== null && s.hour !== undefined ? `_${String(s.hour).padStart(2, '0')}h` : '';
+                const name = `${s.project}_${s.date}${hourStr}`;
+                const key = hourStr ? `${s.project}_${s.date}_${String(s.hour).padStart(2, '0')}` : `${s.project}_${s.date}`;
                 const age = formatAge(s.age_seconds);
-                return `<button class="btn btn-secondary" onclick="loadSnapshot('${s.project}', '${s.date}')" 
-                    style="padding: 4px 10px; font-size: 11px;" title="${name} - ${s.files_count} files - ${age}">
-                    📁 ${name}
-                </button>`;
+                return `<div style="display: inline-flex; align-items: center; gap: 4px;">
+                    <button class="btn btn-secondary" onclick="loadSnapshot('${s.project}', '${s.date}', ${s.hour})" 
+                        style="padding: 4px 10px; font-size: 11px;" title="${name} - ${s.files_count} files - ${age}">
+                        📁 ${name}
+                    </button>
+                    <button onclick="deleteSnapshot('${s.project}', '${s.date}', ${s.hour})" 
+                        style="padding: 2px 6px; font-size: 11px; background: var(--error-color); color: white; border: none; border-radius: 3px; cursor: pointer;" title="Supprimer">
+                        ✕
+                    </button>
+                </div>`;
             }).join('');
         }
 
@@ -1533,13 +1578,37 @@
             return `il y a ${Math.floor(seconds / 86400)}j`;
         }
 
-        async function loadSnapshot(project, date) {
+        async function loadSnapshot(project, date, hour) {
             // Set project and date
             document.getElementById('logs-project').value = project;
             document.getElementById('logs-date').value = date;
+            if (hour !== null && hour !== undefined) {
+                document.getElementById('logs-hour').value = hour;
+            }
 
             // Trigger retrieval (will use snapshot if available)
             await retrieveLogs();
+        }
+
+        async function deleteSnapshot(project, date, hour) {
+            if (!confirm(`Supprimer le snapshot ${project}_${date}${hour !== null && hour !== undefined ? '_' + String(hour).padStart(2, '0') + 'h' : ''} ?`)) {
+                return;
+            }
+            
+            const hourParam = hour !== null && hour !== undefined ? `&hour=${hour}` : '';
+            try {
+                const res = await fetch(`/api/logs/snapshots/${project}/${date}?${hourParam}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    // Refresh snapshots list
+                    loadSnapshotsButtons();
+                } else {
+                    alert('Erreur: ' + (data.error || 'Inconnue'));
+                }
+            } catch (e) {
+                console.error('Error deleting snapshot:', e);
+                alert('Erreur lors de la suppression');
+            }
         }
 
         function openRlogConsole(sessionId, date) {
@@ -1692,12 +1761,26 @@
                 document.getElementById('current-server').textContent = 'Loading...';
                 loadServers().then(() => {
                     const select = document.getElementById('project-select');
-                    const options = Array.from(select.options);
-                    const found = options.find(opt => opt.text.includes(projectFromUrl) || opt.value.includes(projectFromUrl));
-                    if (found) {
-                        select.value = found.value;
-                        selectProjectFromDropdown();
+                    if (select) {
+                        const options = Array.from(select.options);
+                        const found = options.find(opt => opt.text.includes(projectFromUrl) || opt.value.includes(projectFromUrl));
+                        if (found) {
+                            select.value = found.value;
+                            selectProjectFromDropdown();
+                        } else {
+                            fetch('/api/servers')
+                                .then(r => r.json())
+                                .then(servers => {
+                                    const server = servers.find(s => s.project === projectFromUrl);
+                                    if (server) {
+                                        selectServer(server.cccip, server.ccc_dispatch_port, server.project);
+                                    } else {
+                                        alert('Project not found: ' + projectFromUrl);
+                                    }
+                                });
+                        }
                     } else {
+                        // Element not found, fallback to direct server selection
                         fetch('/api/servers')
                             .then(r => r.json())
                             .then(servers => {
@@ -1847,6 +1930,7 @@
         async function retrieveLogs() {
             const project = document.getElementById('logs-project').value;
             const date = document.getElementById('logs-date').value;
+            const hour = document.getElementById('logs-hour') ? document.getElementById('logs-hour').value : '';
             
             if (!project || project === 'No project selected' || !date) {
                 alert('Please select a project and date');
@@ -1863,14 +1947,15 @@
             btn.innerHTML = '⏳ Running...';
             progressContainer.style.display = 'block';
             progressBar.style.width = '10%';
-            progressStatus.textContent = `Récupération des logs pour ${project} le ${date}...`;
+            const hourInfo = hour ? ` (${hour}h)` : '';
+            progressStatus.textContent = `Récupération des logs pour ${project} le ${date}${hourInfo}...`;
             completionStatus.style.display = 'none';
             
             try {
                 const response = await fetch('/api/logs/retrieve', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project, date })
+                    body: JSON.stringify({ project, date, hour })
                 });
                 const data = await response.json();
                 
@@ -1960,6 +2045,7 @@
 
         async function loadSessions() {
             const date = document.getElementById('logs-date').value;
+            const hour = document.getElementById('logs-hour') ? document.getElementById('logs-hour').value : '';
 
             if (!date) {
                 // Update the Calls table with an empty message
@@ -1976,8 +2062,12 @@
                 callsContainer.innerHTML = '<tr><td colspan="6" class="empty-state">⏳ Loading calls...</td></tr>';
             }
 
+            let url = '/api/rlog/sessions?date=' + encodeURIComponent(date);
+            if (hour) {
+                url += '&hour=' + encodeURIComponent(hour);
+            }
             try {
-                const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
+                const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.success) {
@@ -2036,6 +2126,10 @@
                         return dateB.localeCompare(dateA);
                     });
 
+                    // Store data for pagination
+                    callsData = sessionList;
+                    callsCurrentPage = 1;
+
                     // Update the title with the number of calls
                     updateCallsTableTitle(sessionList.length);
 
@@ -2044,34 +2138,7 @@
                         return;
                     }
 
-                    function getCallTypeIcon(callType) {
-                        if (callType === 'incoming') {
-                            return '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>';
-                        } else if (callType === 'outgoing') {
-                            return '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>';
-                        }
-                        return '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>';
-                    }
-
-                    container.innerHTML = sessionList.map(call => {
-                        const caller = (call.caller && call.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.caller) : '-';
-                        const called = (call.called && call.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.called) : '-';
-                        const sessionShort = (call.session_id || '-').split('@')[0];
-                        const callType = call.call_type || '';
-                        const formattedDate = call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-';
-
-                        return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">
-                            <td style="text-align: center;">${getCallTypeIcon(callType)}</td>
-                            <td>${formattedDate}</td>
-                            <td>${caller}</td>
-                            <td>${called}</td>
-                            <td>${call.duration || '-'}</td>
-                            <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
-                            <td>${call.queue_name || '-'}</td>
-                            <td>${call.agent || '-'}</td>
-                            <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">View</button></td>
-                        </tr>`;
-                    }).join('');
+                    renderCallsPage();
                 } else {
                     container.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading calls</td></tr>';
                 }
@@ -2079,6 +2146,62 @@
                 console.error('Error loading calls:', e);
                 container.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading calls</td></tr>';
             }
+        }
+
+        function renderCallsPage() {
+            const container = document.getElementById('logs-calls-container');
+            if (!container) return;
+            
+            const date = document.getElementById('logs-date').value;
+            
+            function getCallTypeIcon(callType) {
+                if (callType === 'incoming') {
+                    return '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>';
+                } else if (callType === 'outgoing') {
+                    return '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>';
+                }
+                return '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>';
+            }
+            
+            const totalPages = Math.ceil(callsData.length / callsPageSize);
+            const startIdx = (callsCurrentPage - 1) * callsPageSize;
+            const endIdx = Math.min(startIdx + callsPageSize, callsData.length);
+            const pageData = callsData.slice(startIdx, endIdx);
+            
+            container.innerHTML = pageData.map(call => {
+                const caller = (call.caller && call.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.caller) : '-';
+                const called = (call.called && call.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.called) : '-';
+                const sessionShort = (call.session_id || '-').split('@')[0];
+                const callType = call.call_type || '';
+                const formattedDate = call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-';
+
+                return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">
+                    <td style="text-align: center;">${getCallTypeIcon(callType)}</td>
+                    <td>${formattedDate}</td>
+                    <td>${caller}</td>
+                    <td>${called}</td>
+                    <td>${call.duration || '-'}</td>
+                    <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
+                    <td>${call.queue_name || '-'}</td>
+                    <td>${call.agent || '-'}</td>
+                    <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">View</button></td>
+                </tr>`;
+            }).join('') + 
+                `<tr><td colspan="9" style="text-align: center; padding: 10px; background: var(--bg-tertiary);">
+                    <button onclick="changeCallsPage(-1)" ${callsCurrentPage === 1 ? 'disabled' : ''} 
+                        style="padding: 4px 12px; margin: 0 5px; cursor: pointer;">&laquo; Précédent</button>
+                    <span>Page ${callsCurrentPage} / ${totalPages} (${callsData.length} appels)</span>
+                    <button onclick="changeCallsPage(1)" ${callsCurrentPage >= totalPages ? 'disabled' : ''} 
+                        style="padding: 4px 12px; margin: 0 5px; cursor: pointer;">Suivant &raquo;</button>
+                </td></tr>`;
+        }
+
+        function changeCallsPage(delta) {
+            const totalPages = Math.ceil(callsData.length / callsPageSize);
+            callsCurrentPage += delta;
+            if (callsCurrentPage < 1) callsCurrentPage = 1;
+            if (callsCurrentPage > totalPages) callsCurrentPage = totalPages;
+            renderCallsPage();
         }
 
         // Update the table title with the number of calls
@@ -2131,83 +2254,26 @@
                         const called = (call.called || '').toLowerCase();
                         const sessionId = (call.session_id || '').toLowerCase();
                         const createDate = (call.create_date_iso || '').toLowerCase();
-
                         return caller.includes(search) ||
                             called.includes(search) ||
                             sessionId.includes(search) ||
                             createDate.includes(search);
                     });
 
+                    // Store filtered data and reset to page 1
+                    callsData = filtered;
+                    callsCurrentPage = 1;
+
                     // Update the title with the number of calls
                     updateCallsTableTitle(filtered.length);
 
-                    const container = document.getElementById('logs-calls-container');
-
-                    if (filtered.length === 0) {
-                        container.innerHTML = '<tr><td colspan="9" class="empty-state">No calls found</td></tr>';
-                        return;
-                    }
-
-                    function getCallTypeIcon(callType) {
-                        if (callType === 'incoming') {
-                            return '<span style="color: #22c55e; font-size: 16px;" title="Appel entrant">&#8595;</span>';
-                        } else if (callType === 'outgoing') {
-                            return '<span style="color: #3b82f6; font-size: 16px;" title="Appel sortant">&#8593;</span>';
-                        }
-                        return '<span style="color: #6b7280; font-size: 16px;">&#8212;</span>';
-                    }
-
-                    container.innerHTML = filtered.map(call => {
-                        const caller = (call.caller && call.caller.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.caller) : '-';
-                        const called = (call.called && call.called.toLowerCase() !== 'undefined') ? removePhonePrefixes(call.called) : '-';
-                        const sessionShort = (call.session_id || '-').split('@')[0];
-                        const callType = call.call_type || '';
-                        const formattedDate = call.create_date_iso ? call.create_date_iso.substring(0, 16).replace('T', ' ') : '-';
-
-                        return `<tr style="cursor: pointer;" onclick="openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">
-                            <td style="text-align: center;">${getCallTypeIcon(callType)}</td>
-                            <td>${formattedDate}</td>
-                            <td>${caller}</td>
-                            <td>${called}</td>
-                            <td>${call.duration || '-'}</td>
-                            <td style="font-family: monospace; font-size: 11px;">${sessionShort}</td>
-                            <td>${call.queue_name || '-'}</td>
-                            <td>${call.agent || '-'}</td>
-                            <td><button class="btn btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="event.stopPropagation(); openRlogConsole('${encodeURIComponent(call.session_id || '')}', '${date}')">View</button></td>
-                        </tr>`;
-                    }).join('');
+                    renderCallsPage();
                 }
             });
         }
 
         // Afficher le nombre de sessions dans le titre de la table
-        async function updateCallsTableTitle() {
-            const date = document.getElementById('logs-date').value;
-            if (!date) return;
-
-            try {
-                const response = await fetch('/api/rlog/sessions?date=' + encodeURIComponent(date));
-                const data = await response.json();
-
-                if (data.success) {
-                    const sessions = data.sessions || {};
-                    let sessionList = Object.values(sessions);
-
-                    // Filter calls with caller containing a dot
-                    sessionList = sessionList.filter(session => {
-                        const caller = session.caller || '';
-                        return !caller.includes('.');
-                    });
-
-                    const titleElement = document.querySelector('#calls-table-container .card-title');
-                    if (titleElement) {
-                        titleElement.textContent = `📞 Calls (${sessionList.length})`;
-                    }
-                }
-            } catch (e) {
-                console.error('Error updating calls table title:', e);
-            }
-        }
+        // (updateCallsTableTitle is defined above with count parameter)
     </script>
 </body>
 

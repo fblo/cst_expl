@@ -191,4 +191,20 @@ python3 test_call_recovery.py
 - Le projet tourne sur Python 3.8+ ; pas de compatibilité Python 2 nécessaire
 - Pas de linting formel configuré ; utiliser `python3 -m py_compile` pour vérifier la syntaxe
 - Pour la vérification de types, installer mypy : `pip3 install mypy && mypy web_server.py get_users_and_calls.py config.py`
+## Notes Supplémentaires
+
+- Le code source utilise des commentaires/docstrings en français ; maintenir la cohérence
+- Le binaire `cccenter_report` est un outil propriétaire pour la communication CCCP
+- Le projet tourne sur Python 3.8+ ; pas de compatibilité Python 2 nécessaire
+- Pas de linting formel configuré ; utiliser `python3 -m py_compile` pour vérifier la syntaxe
+- Pour la vérification de types, installer mypy : `pip3 install mypy && mypy web_server.py get_users_and_calls.py config.py`
 - Le fichier de test `test_call_recovery.py` peut être lancé directement avec `python3 test_call_recovery.py`
+
+## Références de Code
+
+Lorsque vous faites référence à des fonctions ou des morceaux de code spécifiques, utilisez le format `fichier_ligne` pour permettre aux utilisateurs de naviguer facilement vers le code source.
+
+<exemple>
+Où les erreurs du client sont-elles gérées ?
+Les clients sont marqués comme échoués dans la fonction `connectToServer` dans src/services/process.py:712.
+</exemple>

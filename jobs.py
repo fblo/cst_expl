@@ -37,7 +37,7 @@ _job_executor = ThreadPoolExecutor(max_workers=5)
 _log_retrieval_jobs = {}
 
 
-def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str):
+def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str, hour: int = None):
     """Background job: copy log files from NFS or SSH to local directory, then launch dispatch"""
     try:
         _log_retrieval_jobs[job_id]["status"] = "running"
@@ -46,9 +46,10 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
         is_today = (date == today_str)
         
         # Check existing snapshot
-        existing_snapshot = get_log_snapshot(project, date)
+        existing_snapshot = get_log_snapshot(project, date, hour)
 
-        if existing_snapshot:
+        # If hour is specified, ignore existing snapshot and retrieve only relevant files
+        if existing_snapshot and hour is None:
             snapshot_port = existing_snapshot.get("port")
             snapshot_dir = existing_snapshot.get("directory")
             snapshot_files_count = existing_snapshot.get("files_count", 0)
@@ -57,7 +58,8 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
                 info = _dispatch_info.get(snapshot_port, {})
                 process = info.get("process")
                 if process and process.poll() is None:
-                    _log_retrieval_jobs[job_id]["progress"] = f"Snapshot: dispatch active on port {snapshot_port}"
+                    hour_info = f" (hour {hour})" if hour is not None else ""
+                    _log_retrieval_jobs[job_id]["progress"] = f"Snapshot: dispatch active on port {snapshot_port}{hour_info}"
                     _log_retrieval_jobs[job_id]["cached"] = True
                     _log_retrieval_jobs[job_id]["dispatch_port"] = snapshot_port
                     _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
@@ -75,13 +77,14 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
                 existing_logs_compressed = glob.glob(os.path.join(snapshot_dir, "**", "log_*.bz2"), recursive=True)
 
                 if existing_logs or existing_logs_compressed:
-                    _log_retrieval_jobs[job_id]["progress"] = "Local logs detected, launching dispatch..."
+                    hour_info = f" (hour {hour})" if hour is not None else ""
+                    _log_retrieval_jobs[job_id]["progress"] = f"Local logs detected, launching dispatch{hour_info}..."
                     _log_retrieval_jobs[job_id]["cached"] = True
                     _log_retrieval_jobs[job_id]["directory"] = snapshot_dir
                     _log_retrieval_jobs[job_id]["files_source"] = "local"
 
                     cleanup_stale_dispatches(7200)
-                    launch_dispatch_for_job(job_id, project, date, snapshot_dir)
+                    launch_dispatch_for_job(job_id, project, date, snapshot_dir, hour=hour)
                     return
 
         # No snapshot - proceed with retrieval
@@ -148,34 +151,47 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
             
             date_pattern = date.replace('-', '_')
             remote_dir = os.path.join(SSH_CONFIG["remote_base_path"], project, "Logger", project, "_", "ccenter_ccxml", "Ccxml", hostname)
-            remote_pattern = f"log_{date_pattern}_*.log"
+            
+            # Build hour pattern: load hour-2 to hour (within same day only)
+            if hour is not None:
+                hours_to_load = []
+                for h in range(hour - 2, hour + 1):
+                    if 0 <= h <= 23:
+                        hours_to_load.append(h)
+                hour_patterns = [f"log_{date_pattern}__{h:02d}_*.log" for h in hours_to_load]
+                remote_patterns = hour_patterns
+            else:
+                remote_patterns = [f"log_{date_pattern}_*.log"]
             
             _log_retrieval_jobs[job_id]["progress"] = f"SCP: copying logs {date} from {hostname}..."
 
             logger.info(f"[SCP] Starting SCP from {hostname} for project {project} on {date}")
-            logger.info(f"[SCP] Remote path: {remote_dir}/{remote_pattern}")
+            logger.info(f"[SCP] Remote patterns: {remote_patterns}")
             logger.info(f"[SCP] Local path: {logger_dir}")
 
-            sshpass_cmd = [
-                "sshpass", "-p", SSH_CONFIG["password"],
-                "scp", "-o", "StrictHostKeyChecking=no",
-                "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
-                "-o", "HostKeyAlgorithms=+ssh-rsa",
-                "-o", "KexAlgorithms=+diffie-hellman-group1-sha1",
-                f"{SSH_CONFIG['user']}@{hostname}:{remote_dir}/{remote_pattern}",
-                logger_dir + "/"
-            ]
+            # SCP doesn't support multiple patterns, so loop through each
+            all_copied = []
+            for pattern in remote_patterns:
+                sshpass_cmd = [
+                    "sshpass", "-p", SSH_CONFIG["password"],
+                    "scp", "-o", "StrictHostKeyChecking=no",
+                    "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+                    "-o", "HostKeyAlgorithms=+ssh-rsa",
+                    "-o", "KexAlgorithms=+diffie-hellman-group1-sha1",
+                    f"{SSH_CONFIG['user']}@{hostname}:{remote_dir}/{pattern}",
+                    logger_dir + "/"
+                ]
 
-            # logger.info(f"[SCP] Command: {' '.join(sshpass_cmd)}")
+                # logger.info(f"[SCP] Command: {' '.join(sshpass_cmd)}")
 
-            scp_result = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=300)
+                scp_result = subprocess.run(sshpass_cmd, capture_output=True, text=True, timeout=300)
 
-            logger.info(f"[SCP] Return code: {scp_result.returncode}")
-            logger.info(f"[SCP] Stdout: {scp_result.stdout}")
-            logger.info(f"[SCP] Stderr: {scp_result.stderr}")
+                logger.info(f"[SCP] Pattern {pattern} - Return code: {scp_result.returncode}")
 
-            if scp_result.returncode != 0:
-                if "sshpass" in scp_result.stderr or "not found" in scp_result.stderr.lower():
+                if scp_result.returncode == 0:
+                    copied_for_pattern = glob.glob(os.path.join(logger_dir, pattern.replace("*.log", "*.log")))
+                    all_copied.extend(copied_for_pattern)
+                elif "sshpass" in scp_result.stderr or "not found" in scp_result.stderr.lower():
                     _log_retrieval_jobs[job_id]["error"] = "ERROR: sshpass not installed"
                     _log_retrieval_jobs[job_id]["status"] = "error"
                     return
@@ -194,7 +210,7 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
             
             _log_retrieval_jobs[job_id]["progress"] = "Launching dispatch..."
             cleanup_stale_dispatches(7200)
-            launch_dispatch_for_job(job_id, project, date, date_based_dir)
+            launch_dispatch_for_job(job_id, project, date, date_based_dir, hour=hour)
             return
 
         # NFS retrieval for past days
@@ -211,32 +227,82 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
         existing_logs = glob.glob(os.path.join(logger_dir, "log_*.log"))
         existing_logs_compressed = glob.glob(os.path.join(logger_dir, "log_*.bz2"))
 
-        if existing_logs or existing_logs_compressed:
+        # Filter existing logs by hour if specified
+        if hour is not None:
+            hours_to_load = []
+            # hour-2 to hour (3 hours)
+            for h in range(hour - 2, hour + 1):
+                if 0 <= h <= 23:
+                    hours_to_load.append(h)
+            hour_patterns = [f"__{h:02d}_" for h in hours_to_load]
+            
+            existing_logs = [f for f in existing_logs if any(p in os.path.basename(f) for p in hour_patterns)]
+            existing_logs_compressed = [f for f in existing_logs_compressed if any(p in os.path.basename(f) for p in hour_patterns)]
+
+        # When hour is specified, never use cache - always download fresh filtered files
+        use_cache = False
+        if hour is None and (existing_logs or existing_logs_compressed):
             total_files = len(existing_logs) + len(existing_logs_compressed)
             _log_retrieval_jobs[job_id]["progress"] = f"Logs already retrieved ({total_files} files)"
             _log_retrieval_jobs[job_id]["copied"] = total_files
             _log_retrieval_jobs[job_id]["cached"] = True
-            is_cached = True
+            use_cache = True
+
+        if use_cache:
+            # Skip to dispatch launch
+            _log_retrieval_jobs[job_id]["progress"] = "🚀 Lancement du dispatch..."
+            launch_dispatch_for_job(job_id, project, date, date_based_dir, is_cached=True, hour=hour)
+            return
+
+        # When hour is specified, delete existing files first to get fresh filtered ones
+        if hour is not None and (existing_logs or existing_logs_compressed):
+            for f in existing_logs:
+                try:
+                    os.remove(f)
+                except:
+                    pass
+            for f in existing_logs_compressed:
+                try:
+                    os.remove(f)
+                except:
+                    pass
+
+        is_cached = False
+        date_pattern = date.replace('-', '_')
+        
+        # Build hour pattern for filtering
+        if hour is not None:
+            hours_to_load = []
+            # hour-2 to hour (3 hours)
+            for h in range(hour - 2, hour + 1):
+                if 0 <= h <= 23:
+                    hours_to_load.append(h)
+            hour_patterns = [f"log_{date_pattern}__{h:02d}_" for h in hours_to_load]
         else:
-            is_cached = False
-            date_pattern = date.replace('-', '_')
-            pattern = os.path.join(nfs_path, f"log_{date_pattern}*")
-            nfs_files = glob.glob(pattern)
-            
-            if not nfs_files:
-                _log_retrieval_jobs[job_id]["status"] = "error"
-                _log_retrieval_jobs[job_id]["error"] = f"No log_{date_pattern}* file found"
-                return
+            hour_patterns = None
+        
+        pattern = os.path.join(nfs_path, f"log_{date_pattern}*")
+        nfs_files = glob.glob(pattern)
+        
+        # Filter by hour if specified
+        if hour_patterns:
+            nfs_files = [f for f in nfs_files if any(p in os.path.basename(f) for p in hour_patterns)]
+        
+        if not nfs_files:
+            hour_info = f" for hour {hour}" if hour is not None else ""
+            _log_retrieval_jobs[job_id]["status"] = "error"
+            _log_retrieval_jobs[job_id]["error"] = f"No log_{date_pattern}* file found{hour_info}"
+            return
+        
+        total_files = len(nfs_files)
+        _log_retrieval_jobs[job_id]["total_files"] = total_files
+        _log_retrieval_jobs[job_id]["progress"] = f"{total_files} files found on NFS"
 
-            total_files = len(nfs_files)
-            _log_retrieval_jobs[job_id]["total_files"] = total_files
-            _log_retrieval_jobs[job_id]["progress"] = f"{total_files} files found on NFS"
+        copied = 0
+        decompressed = 0
+        errors = []
 
-            copied = 0
-            decompressed = 0
-            errors = []
-
-            for f in nfs_files:
+        for f in nfs_files:
                 basename = os.path.basename(f)
                 dest = os.path.join(logger_dir, basename)
 
@@ -260,20 +326,20 @@ def run_log_retrieval_job(job_id: str, project: str, date: str, target_dir: str)
 
         # Launch dispatch
         _log_retrieval_jobs[job_id]["progress"] = "🚀 Lancement du dispatch..."
-        launch_dispatch_for_job(job_id, project, date, date_based_dir, is_cached=is_cached)
+        launch_dispatch_for_job(job_id, project, date, date_based_dir, is_cached=is_cached, hour=hour)
 
     except Exception as e:
         _log_retrieval_jobs[job_id]["status"] = "error"
         _log_retrieval_jobs[job_id]["error"] = str(e)
 
 
-def launch_dispatch_for_job(job_id: str, project: str, date: str, logs_dir: str, is_cached: bool = False):
+def launch_dispatch_for_job(job_id: str, project: str, date: str, logs_dir: str, is_cached: bool = False, hour: int = None):
     """Launch dispatch after log retrieval"""
     try:
         from get_users_and_calls import RlogDispatcher
         RlogDispatcher.reset()
 
-        dispatcher = RlogDispatcher(logs_dir)
+        dispatcher = RlogDispatcher(logs_dir, hour=hour)
 
         # Find available port
         import socket
@@ -328,7 +394,7 @@ def launch_dispatch_for_job(job_id: str, project: str, date: str, logs_dir: str,
         register_dispatch(date, dispatcher.port, dispatcher.process, project)
 
         files_count = len(glob.glob(os.path.join(logs_dir, "**", "log_*.log*"), recursive=True))
-        save_log_snapshot(project, date, dispatcher.port, logs_dir, files_count)
+        save_log_snapshot(project, date, dispatcher.port, logs_dir, files_count, hour)
 
         _log_retrieval_jobs[job_id]["status"] = "done"
         _log_retrieval_jobs[job_id]["progress"] = f"Done. Dispatch on port {dispatcher.port}"
